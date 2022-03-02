@@ -1,0 +1,22 @@
+{
+  "name": "react-create-conveyor",
+  "version": "1.0.0",
+  "description": "share data between components for react",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Archer03/react-create-conveyor.git"
+  },
+  "keywords": [
+    "react"
+  ],
+  "author": "grant zheng",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/Archer03/react-create-conveyor/issues"
+  },
+  "homepage": "https://github.com/Archer03/react-create-conveyor#readme"
+}
