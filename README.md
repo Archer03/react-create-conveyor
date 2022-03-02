@@ -1,6 +1,6 @@
 # react-create-conveyor
 
-A state-management solution for react in Provider-less mode
+A state-management solution for react in Provider-less mode\
 Just get value,  and set value, it's all ⚽
 ```javascript
 import { createConveyor } from 'react-create-conveyor';
@@ -13,5 +13,5 @@ function Example () {
 }
 ```
 
-other nice solutions: jotai, zustand, recoil
+other nice solutions: jotai, zustand, recoil\
 which are designed to be more comprehensive enough to unify the world 🦸
