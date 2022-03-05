@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useCallback } from 'react';
+import { useEffect, useReducer, useCallback, useRef } from 'react';
 import produce from 'immer';
 
 export const createConveyor = state => {
@@ -18,9 +18,24 @@ export const createConveyor = state => {
         updaters.forEach(doCheck => doCheck());
       }
     })
+    const { current: oldMemoDeps } = useRef([]);
+    const { current: oldMemoValues } = useRef([]);
+    const memoIndex = useRef(0);
+    const memo = (computedFn, deps) => {
+      const index = memoIndex.current++;
+      const oldDeps = oldMemoDeps[index];
+      let changed = !oldDeps || oldDeps.some((old, i) => !Object.is(old, deps[i]));
+      if (changed) {
+        oldMemoDeps[index] = deps.slice();
+        return oldMemoValues[index] = computedFn();
+      } else {
+        return oldMemoValues[index];
+      }
+    }
     const execSelector = () => {
       if (!selector) return [false, state];
-      const select = selector({ state, track, task });
+      const select = selector({ state, track, task, memo });
+      memoIndex.current = 0;
       return [pathArr.length !== 0, select];
     }
 
@@ -31,7 +46,7 @@ export const createConveyor = state => {
     const doCheck = () => {
       ignoreTrack = true;
       const [, next] = execSelector();
-      if (selector && !dataChanged(selected, next)) return;
+      if (selector && !stateChanged(selected, next)) return;
       forceUpdate();
     }
 
@@ -67,15 +82,22 @@ export const createConveyor = state => {
   }
 }
 
-const dataChanged = (preSelected, nextSelected) => {
+/**
+ * check should update
+ */
+const stateChanged = (preSelected, nextSelected) => {
   if (Object.prototype.toString.call(preSelected) === '[object Object]') {
     return Object.entries(preSelected)
-      .filter(([, value]) => typeof value !== 'function') // todo 依赖变了的话也要变吧？先重现 再fix
+      // for task props as function, the state it depends will always be latest, so ignore it
+      .filter(([, value]) => typeof value !== 'function')
       .some(([key, value]) => !Object.is(value, nextSelected[key]));
   }
   return !Object.is(preSelected, nextSelected);
 }
 
+/**
+ * get a new root state
+ */
 const syncChangesToState = (state, nextSlice, pathArr) => {
   if (pathArr.length === 0) { // if not tracked, nextSlice will always be next state 
     return nextSlice;

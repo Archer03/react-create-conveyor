@@ -1,6 +1,6 @@
 {
   "name": "react-create-conveyor",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "share data between components for react",
   "main": "index.js",
   "scripts": {
@@ -18,5 +18,8 @@
   "bugs": {
     "url": "https://github.com/Archer03/react-create-conveyor/issues"
   },
-  "homepage": "https://github.com/Archer03/react-create-conveyor#readme"
+  "homepage": "https://github.com/Archer03/react-create-conveyor#readme",
+  "dependencies": {
+    "immer": "^9.0.12"
+  }
 }
