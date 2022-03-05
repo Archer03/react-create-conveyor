@@ -1,6 +1,6 @@
 {
   "name": "react-create-conveyor",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "share data between components for react",
   "main": "index.js",
   "scripts": {
