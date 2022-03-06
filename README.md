@@ -14,7 +14,7 @@ function Example () {
 }
 ```
 
-Advanced usage
+### Advanced usage
 
 ```javascript
 export const [useMyData] = createConveyor({
@@ -86,43 +86,42 @@ const D = () => {
   return <div>
     <button onClick={() => drawDog(draftDog => {
       draftDog.name = 'da huang'; // just draw it in producer
-      draftDog.breed += '🐕'; // next immutable state will be created by powerful immerJS
+      draftDog.breed += '🐕'; // next immutable state created by powerful immerJS
     })}>D {dog.fullName}</button>
     memo:{dog.memoName}
-    <button onClick={() => dog.myDisptch({ type: 'RESET', payload: 2 })}>reset {dog.age}</button>
+    <button onClick={() => 
+      dog.myDisptch({ type: 'RESET', payload: 2 })
+    }>reset {dog.age}</button>
   </div>
 }
 ```
 
-Global Action & Async Task
+### Global Action & Async Task
 
 ```javascript
-export const [useMyData, { register: myRegister, dispatch: myDispatch }] = createConveyor({
+export const [useMyData, myRegister, myDispatch] = createConveyor({
   dog: {
-    breed: '🐶',
     age: 2
   }
 })
 
-// select, put and state will be safe in async callback
+// register an assignment for current Conveyor
+// select, put and state will be safe at async callback
+// you could also pass producer function or value to 'put'
 myRegister('UPDATE_DOG', (action, selectToPut) => {
   const { select, put, state } = selectToPut(track => ({
     dogAge: track('dog', 'age'),
-    dogBreed: track('dog', 'breed')
   }));
-  const rootState = state(); // get anything from root state
+  const rootState = state(); // get anything from root state for preparation
   setTimeout(() => {
-    const age = select().dogAge * 2; // prepare some logic
-    put(draft => { // commit state changes whenever you want
-      draft.dogAge = age;
-      draft.dogBreed = action.payload;
-    })
+    put(draft => { draft.dogAge *= 2 }); // commit state changes whenever you want
+    put(select().dogAge * 10); // 20 fold increased
   }, 2000);
 })
 
 const E = () => {
   return <button onClick={() =>
-    myDispatch({ type: 'UPDATE_DOG', payload: '🐺' })
+    myDispatch({ type: 'UPDATE_DOG' })
   }>E async 2s</button>
 }
 ```

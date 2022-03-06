@@ -5,14 +5,22 @@ export const createConveyor = state => {
   const updaters = new Set();
   const assignmentMap = new Map();
   const getState = () => state;
+  let pendingUpdate = false;
   const checkShouldUpdate = newState => {
     if (Object.is(state, newState)) return;
     state = newState;
-    updaters.forEach(doCheck => doCheck());
+    if (pendingUpdate) return;
+    pendingUpdate = true;
+    queueMicrotask(() => {
+      pendingUpdate = false;
+      updaters.forEach(doCheck => doCheck());
+    })
   }
+  // [hook, register, dispatch]
   return [
-    // hook
     selector => {
+      const pathArr = [];
+      let ignoreTrack = false;
       const track = (...path) => {
         if (path.length === 0) throw ('path needed!');
         !ignoreTrack && pathArr.push(path);
@@ -20,11 +28,9 @@ export const createConveyor = state => {
       }
       const task = (reducer => {
         return (...params) => {
-          const nextSlice = produce(hasTrack ? selected : state, draft => reducer(draft, ...params));
-          const newState = syncChangesToState(state, nextSlice, pathArr);
-          if (Object.is(state, newState)) return;
-          state = newState;
-          updaters.forEach(doCheck => doCheck());
+          const work = draft => reducer(draft, ...params);
+          const newState = getNewState(selected, state, pathArr, work);
+          checkShouldUpdate(newState);
         }
       })
       const { current: oldMemoDeps } = useRef([]);
@@ -41,21 +47,18 @@ export const createConveyor = state => {
           return oldMemoValues[index];
         }
       }
+
       const execSelector = () => {
-        if (!selector) return [false, state];
+        if (!selector) return state;
         const select = selector({ state: getState, track, task, memo });
         memoIndex.current = 0;
-        return [pathArr.length !== 0, select];
+        return select;
       }
-
-      const pathArr = [];
-      let ignoreTrack = false;
-      const [hasTrack, selected] = execSelector();
+      const selected = execSelector();
       const [, forceUpdate] = useReducer(x => x + 1, 0);
       const doCheck = () => {
         ignoreTrack = true;
-        const [, next] = execSelector();
-        if (selector && !stateChanged(selected, next)) return;
+        if (selector && !stateChanged(selected, execSelector())) return;
         forceUpdate();
       }
 
@@ -67,27 +70,12 @@ export const createConveyor = state => {
       return [
         selected,
         useCallback(work => {
-          let newState = null;
-          if (typeof work === 'function') {
-            const nextSlice = produce(hasTrack ? selected : state, work);
-            newState = syncChangesToState(state, nextSlice, pathArr);
-          } else if (selector) {
-            if (pathArr.length === 0) throw ('track needed!');
-            if (pathArr.length > 1)
-              throw ('more than one props are tracked, only function is allowed to pass for updating.');
-            newState = produce(state, draft => {
-              const path = pathArr[0].slice();
-              const lastKey = path.pop();
-              path.reduce((p, v) => p[v], draft)[lastKey] = work;
-            })
-          } else {
-            newState = work;
-          }
+          const newState = getNewState(selected, state, pathArr, work);
           checkShouldUpdate(newState);
-        }, [selector, pathArr]) // 事实上selector和pathArr每次都会变
+        }, [selector])
       ];
     },
-    // action register
+    // register
     (...params) => {
       register(...params, assignmentMap);
     },
@@ -112,12 +100,9 @@ const stateChanged = (preSelected, nextSelected) => {
 }
 
 /**
- * get a new root state
+ * sync changes from slice to root state
  */
 const syncChangesToState = (state, nextSlice, pathArr) => {
-  if (pathArr.length === 0) { // if not tracked, nextSlice will always be next state 
-    return nextSlice;
-  }
   return produce(state, draft => {
     if (Object.prototype.toString.call(nextSlice) !== '[object Object]') {
       const paths = pathArr[0].slice();
@@ -134,11 +119,34 @@ const syncChangesToState = (state, nextSlice, pathArr) => {
   })
 }
 
+/**
+ * create new root state
+ */
+const getNewState = (selected, state, pathArr, work) => {
+  let newState = null;
+  if (typeof work === 'function') {
+    const nextSlice = produce(pathArr.length ? selected : state, work);
+    newState = pathArr.length ? syncChangesToState(state, nextSlice, pathArr) : nextSlice;
+  } else if (selected !== state) { // it happens only when selector executed
+    if (pathArr.length !== 1) throw ('to set value directly, please track single prop!');
+    newState = syncChangesToState(state, work, pathArr);
+  } else {
+    newState = work;
+  }
+  return newState;
+}
+
+/**
+ * register assignment by unique type
+ */
 const register = (type, assignment, assignmentMap) => {
   if (assignmentMap.get(type)) throw ('duplicate type added!');
   assignmentMap.set(type, assignment);
 }
 
+/**
+ * dispatch an assignment to do
+ */
 const dispatch = (action, assignmentMap, getState, checkShouldUpdate) => {
   const assignment = assignmentMap.get(action.type);
   if (!assignment) throw ('no type registered!');
@@ -155,10 +163,9 @@ const dispatch = (action, assignmentMap, getState, checkShouldUpdate) => {
       ignoreTrack = true;
     }
     const operators = {
-      select: () => !selector ? getState() : selector(track),
-      put: producer => {
-        const newState = !selector ? produce(getState(), producer) :
-          syncChangesToState(getState(), produce(operators.select(), producer), pathArr);
+      select: () => selector ? selector(track) : getState(),
+      put: work => {
+        const newState = getNewState(operators.select(), getState(), pathArr, work);
         checkShouldUpdate(newState);
       },
       state: getState
