@@ -1,6 +1,6 @@
 {
   "name": "react-create-conveyor",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "share data between components for react",
   "main": "index.js",
   "scripts": {
@@ -11,7 +11,7 @@
     "url": "git+https://github.com/Archer03/react-create-conveyor.git"
   },
   "keywords": [
-    "react"
+    "react, immer, context, hook, state, management, redux"
   ],
   "author": "grant zheng",
   "license": "MIT",

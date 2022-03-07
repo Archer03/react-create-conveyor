@@ -14,7 +14,7 @@ function Example () {
 }
 ```
 
-### Advanced usage
+## Advanced usage
 
 ```javascript
 export const [useMyData] = createConveyor({
@@ -41,21 +41,20 @@ const A = () => {
   }>A{toDos}</button>
 }
 
-// pass value to setCount instead of a producer
+// pass value to setCount instead of producer function
 // but this is allowed only when single prop tracked
-// and if it is primitive value, setCount(count => count++) dosen't work
+// and if it is primitive value, usage like setCount(count => count++) dosen't work
 const B = () => {
   const [count, setCount] = useMyData(({ track }) => track('count'));
   return <button onClick={() => setCount(count + 1)}>B{count}</button>
 }
 
 // track is not necessary
-// if no prop tracked, root state received in producer instead
-// and selector won't be linked to producer
+// if no prop tracked, root state passed to producer instead
 const C = () => {
   const [{ cNum, upTen }, myUpdate] = useMyData(({ state, task }) => ({
     cNum: state().count,
-    upTen: task((draft) => { draft.count += 10 }) // just do it
+    upTen: task((draft) => { draft.count += 10 }) // just do it (use count but not cNum)
   }));
   return <div>
     <button onClick={upTen}>C upTen{cNum}</button>
@@ -66,7 +65,7 @@ const C = () => {
 }
 
 // use memo to cache calculation
-// use task to define any plan method
+// use task to define any assignment method
 const D = () => {
   const [dog, drawDog] = useMyData(({ state, track, task, memo }) => ({
     name: track('dog', 'name'),
@@ -96,7 +95,7 @@ const D = () => {
 }
 ```
 
-### Global Action & Async Task
+## Global Action & Async Task
 
 ```javascript
 export const [useMyData, myRegister, myDispatch] = createConveyor({
@@ -107,7 +106,7 @@ export const [useMyData, myRegister, myDispatch] = createConveyor({
 
 // register an assignment for current Conveyor
 // select, put and state will be safe at async callback
-// you could also pass producer function or value to 'put'
+// you could also pass producer function or value to 'put', same as advanced usage above
 myRegister('UPDATE_DOG', (action, selectToPut) => {
   const { select, put, state } = selectToPut(track => ({
     dogAge: track('dog', 'age'),
