@@ -34,18 +34,18 @@ export const createConveyor = (state, strictMode) => {
   return [
     selector => {
       const pathArr = [];
-      let ignoreTrack = false;
       const track = (...path) => {
         if (path.length === 0) throw ('path needed!');
-        !ignoreTrack && pathArr.push(path);
-        return path.reduce((p, v) => p[v], state);
+        const ret = path.reduce((p, v) => p[v], state);
+        pathArr.push({ ret, path });
+        return ret;
       }
       const task = (reducer => {
         return strictMode ?
           () => { throw ('under strict mode, better to register global action.') } :
           (...params) => {
             const work = draft => reducer(draft, ...params);
-            const newState = getNewState(selected, state, pathArr, work);
+            const newState = getNewState(state, execSelect(), pathArr, work);
             checkShouldUpdate(newState);
           }
       })
@@ -64,17 +64,17 @@ export const createConveyor = (state, strictMode) => {
         }
       }
 
-      const execSelector = () => {
+      const execSelect = () => {
         if (!selector) return state;
+        pathArr.length = 0;
         const select = selector({ state: getRoot, track, task, memo });
         memoIndex.current = 0;
         return select;
       }
-      const selected = execSelector();
+      const selected = execSelect();
       const [, forceUpdate] = useReducer(x => x + 1, 0);
       const doCheck = () => {
-        ignoreTrack = true;
-        if (selector && !selectedChanged(selected, execSelector())) return;
+        if (selector && !selectedChanged(selected, execSelect())) return;
         forceUpdate();
       }
 
@@ -88,7 +88,7 @@ export const createConveyor = (state, strictMode) => {
         strictMode ?
           () => { throw ('under strict mode, better to register global action.') } :
           useCallback(work => {
-            const newState = getNewState(selected, state, pathArr, work);
+            const newState = getNewState(state, execSelect(), pathArr, work);
             checkShouldUpdate(newState);
           }, [selector])
       ];
@@ -122,16 +122,21 @@ const selectedChanged = (preSelected, nextSelected) => {
 /**
  * sync changes from slice to root state
  */
-const syncChangesToRoot = (curRoot, nextSlice, pathArr) => {
+const syncChangesToRootByPath = (curRoot, selected, nextSlice, pathArr) => {
+  if (!pathArr.length) throw ('track prop needed!'); // throw for savety
+  // track as selector ret is like: useMyData(({ track }) => track('dog'))
+  const trackAsSelectorRet = pathArr[0].ret === selected;
   return produce(curRoot, draft => {
-    if (Object.prototype.toString.call(nextSlice) !== '[object Object]') { // 有bug 应该区分是组合对象，还是track的单个值对象
-      const paths = pathArr[0].slice();
+    if (Object.prototype.toString.call(nextSlice) !== '[object Object]' || trackAsSelectorRet) {
+      // this case for no relationship mapped by new key, just think about selector return a value
+      // and only single key would be tracked here
+      const paths = pathArr[0].path.slice();
       const lastKey = paths.pop();
       paths.reduce((p, v) => p[v], draft)[lastKey] = nextSlice;
     } else {
       Object.entries(nextSlice).forEach(([key, value], index) => {
         if (index > pathArr.length - 1) return; // todo 有没有其他方式对应key?
-        const paths = pathArr[index].slice();
+        const paths = pathArr[index].path.slice();
         const lastKey = paths.pop();
         paths.reduce((p, v) => p[v], draft)[lastKey] = value;
       });
@@ -142,14 +147,14 @@ const syncChangesToRoot = (curRoot, nextSlice, pathArr) => {
 /**
  * create new root state
  */
-const getNewState = (selected, state, pathArr, work) => {
+const getNewState = (curRoot, selected, pathArr, work) => {
   let newState = null;
   if (typeof work === 'function') {
-    const nextSlice = produce(pathArr.length ? selected : state, work);
-    newState = pathArr.length ? syncChangesToRoot(state, nextSlice, pathArr) : nextSlice;
-  } else if (selected !== state) { // it happens only when selector executed
+    const nextSlice = produce(pathArr.length ? selected : curRoot, work);
+    newState = pathArr.length ? syncChangesToRootByPath(curRoot, selected, nextSlice, pathArr) : nextSlice;
+  } else if (selected !== curRoot) { // it happens only when maping passed to selector
     if (pathArr.length !== 1) throw ('to set value directly, please track single prop!');
-    newState = syncChangesToRoot(state, work, pathArr);
+    newState = syncChangesToRootByPath(curRoot, selected, work, pathArr);
   } else {
     newState = work;
   }
@@ -171,26 +176,27 @@ const dispatch = (action, assignmentMap, getRoot, checkShouldUpdate) => {
   const assignment = assignmentMap.get(action.type);
   if (!assignment) throw ('no type registered!');
   const pathArr = [];
-  let ignoreTrack = false;
   const track = (...path) => {
     if (path.length === 0) throw ('path needed!');
-    !ignoreTrack && pathArr.push(path);
-    return path.reduce((p, v) => p[v], getRoot());
+    const ret = path.reduce((p, v) => p[v], getRoot());
+    pathArr.push({ ret, path });
+    return ret;
   }
   const selectToPut = selector => {
-    if (selector) {
-      selector(track);
-      ignoreTrack = true;
+    const execSelect = () => {
+      if (!selector) return getRoot();
+      pathArr.length = 0; // to keep pathArr info latest
+      return selector(track);
     }
-    const operators = {
-      select: () => selector ? selector(track) : getRoot(),
+    execSelect();
+    return {
+      select: execSelect,
       put: work => {
-        const newState = getNewState(operators.select(), getRoot(), pathArr, work);
+        const newState = getNewState(getRoot(), execSelect(), pathArr, work);
         checkShouldUpdate(newState);
       },
       state: getRoot
     }
-    return operators;
   }
   assignment(action, selectToPut);
 }
