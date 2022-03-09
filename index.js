@@ -5,7 +5,7 @@ const GET_STATE = Symbol();
 const CHECK_UPDATE = Symbol();
 const ON_UPDATE = Symbol();
 
-export const createConveyor = state => {
+export const createConveyor = (state, ...debugTarget) => {
   const updaters = new Set();
   const assignmentMap = new Map();
   const getRoot = () => state;
@@ -13,6 +13,7 @@ export const createConveyor = state => {
   let pendingUpdate = false;
   const checkShouldUpdate = next => {
     if (Object.is(state, next)) return;
+    hitSoy(state, next, debugTarget);
     state = next;
     onSelfUpdate.forEach(callback => callback());
     if (pendingUpdate) return;
@@ -231,4 +232,20 @@ const syncChangesToRootByPath = (curRoot, selected, nextSlice, pathArr) => {
       });
     }
   })
+}
+
+/**
+ * if the tracked props changed, debugEntry function will be executed
+ */
+const hitSoy = (preState, nextState, [debugProps, debugEntry]) => {
+  if (!debugProps) return;
+  const changedProps = debugProps.reduce((collected, propPaths) => {
+    const pre = propPaths.reduce((p, v) => p[v], preState);
+    const next = propPaths.reduce((p, v) => p[v], nextState);
+    if (!Object.is(pre, next)) {
+      collected.push({ pre, next })
+    }
+    return collected;
+  }, []);
+  if (changedProps.length) debugEntry(changedProps);
 }

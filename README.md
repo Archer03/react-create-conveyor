@@ -95,7 +95,7 @@ const D = () => {
 }
 ```
 
-## Global Action & Async Task
+## Register Assignment & Async Task
 
 ```javascript
 export const [useMyData, myRegister, myDispatch] = createConveyor({
@@ -123,6 +123,42 @@ const E = () => {
     myDispatch({ type: 'UPDATE_DOG' })
   }>E async 2s</button>
 }
+```
+
+### Cancellation
+
+### Assignment resolved
+
+## Assemble sub conveyor
+
+```javascript
+const [useGlobal, , , globalAssemble] = createConveyor({}); // first day created a global conveyor
+const [, , , , subInstance] = createConveyor(666); // two weeks later created a sub conveyor
+
+// three month later you found the sub conveyor was accessed more frequently than you thought at the begining
+globalAssemble('assembledNumber', subInstance); // just assemble it, it's ok
+
+const F = () => {
+  const [fNum] = useGlobal(({ track }) => track('assembledNumber'));
+  return <>F{fNum}</> // F666, get it in global conveyor
+}
+```
+
+## Debug Entry
+
+Let's see something useful
+
+```javascript
+// provide path of prop for the second param
+// multiple props is allowed, as it is a 2D array
+// just debug happily
+const [useMyData, myRegister, myDispatch] = createConveyor({
+  dog: {
+    age: 2
+  }
+}, [['dog', 'age']], changed => {
+  console.log(JSON.stringify(changed)); // consle log: [{"pre":2,"next":3}]
+})
 ```
 
 other nice solutions: jotai, zustand, recoil\
