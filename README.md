@@ -98,16 +98,16 @@ const D = () => {
 ## Register Assignment & Async Task
 
 ```javascript
-export const [useMyData, myRegister, myDispatch] = createConveyor({
+export const [useMyData, { register: myRegister, dispatch: myDispatch }] = createConveyor({
   dog: {
     age: 2
   }
 })
 
-// register an assignment for current Conveyor
+// register an assignment for current conveyor
 // select, put and state will be safe at async callback
 // you could also pass producer function or value to 'put', same as advanced usage above
-myRegister('UPDATE_DOG', (action, selectToPut) => {
+myRegister('UPDATE_DOG', (action, { selectToPut }) => {
   const { select, put, state } = selectToPut(track => ({
     dogAge: track('dog', 'age'),
   }));
@@ -127,15 +127,56 @@ const E = () => {
 
 ### Cancellation
 
+```javascript
+// step accept a promise, and emit value
+myRegister('UPDATE_DOG2', (action, { selectToPut }) => {
+  const { step } = selectToPut(track => track('dog'));
+  const mockApi = new Promise(res => setTimeout(res, 1000));
+  step(mockApi).then(() => { // do something });
+})
+
+// pass a promise which would become fulfilled when it's time to cancel
+myDispatch({ type: 'UPDATE_DOG2' }, cancelPromise);
+
+```
+
+to some degree, cancelPromise is like AbortController
+what will happen when cancelPromise is fulfilled? 👇
+all of the pending step will stay at pending forever
+
+```javascript
+// for example, if cancellation is earlier than mockApi
+step(mockApi).then(() => { // will never be executed });
+```
+
+#### some skill
+
+```javascript
+// example to create cancelPromise
+const [cancelPromise, cancel] = (() => {
+  let cancel = null;
+  return [new Promise(res => cancel = res), cancel];
+})();
+```
+
 ### Assignment resolved
+
+```javascript
+myRegister('UPDATE_DOG3', (action, { selectToPut, done }) => {
+  // developer need to determine when to execute done
+  done(); // whenever
+})
+myDispatch({ type: 'UPDATE_DOG3' }).then(() => console.log('done'));
+
+```
 
 ## Assemble sub conveyor
 
 ```javascript
-const [useGlobal, , , globalAssemble] = createConveyor({}); // first day created a global conveyor
-const [, , , , subInstance] = createConveyor(666); // two weeks later created a sub conveyor
+const [useGlobal, { assemble: globalAssemble }] = createConveyor({}); // created a global conveyor
+const [, subInstance] = createConveyor(666); // two weeks later created a sub conveyor
 
-// three month later you found the sub conveyor was accessed more frequently than you thought at the begining
+// three month later found the sub conveyor was accessed more frequently than you thought at the begining
 globalAssemble('assembledNumber', subInstance); // just assemble it, it's ok
 
 const F = () => {
@@ -152,12 +193,9 @@ Let's see something useful
 // provide path of prop for the second param
 // multiple props is allowed, as it is a 2D array
 // just debug happily
-const [useMyData, myRegister, myDispatch] = createConveyor({
-  dog: {
-    age: 2
-  }
-}, [['dog', 'age']], changed => {
-  console.log(JSON.stringify(changed)); // consle log: [{"pre":2,"next":3}]
+// and with function call stack, you can find out where changes happened exactly
+createConveyor({ dog: { age: 2 } }, [['dog', 'age']], changed => {
+  console.log(changed); // consle log: [{"pre":2,"next":3}]
 })
 ```
 
