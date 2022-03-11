@@ -115,7 +115,7 @@ export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
   const { [GET_STATE]: getRoot, [CHECK_UPDATE]: checkShouldUpdate, [ASSIGN_MAP]: assignmentMap } = conveyor;
   const assignment = assignmentMap.get(action.type);
   if (!assignment) throw ('no type registered!');
-  const cancelled = false;
+  let cancelled = false;
   cancelSignal && cancelSignal.then(() => {
     cancelled = true;
     cancelCallback && cancelCallback();
@@ -141,9 +141,9 @@ export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
         checkShouldUpdate(newState);
       },
       state: getRoot,
-      call: promise => new Promise((resolve, reject) => {
+      step: promise => new Promise((resolve, reject) => {
         promise.then(res => {
-          if (cancelled) return new Promise();
+          if (cancelled) return;
           resolve(res);
         }).catch(err => reject(err));
       })

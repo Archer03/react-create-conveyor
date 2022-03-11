@@ -125,23 +125,24 @@ const E = () => {
 }
 ```
 
-### Cancellation
+### Assignment Cancellation
 
 ```javascript
-// step accept a promise, and emit value
+// use step to accept a promise
+// then it will return a "cancellable" promise
 myRegister('UPDATE_DOG2', (action, { selectToPut }) => {
   const { step } = selectToPut(track => track('dog'));
   const mockApi = new Promise(res => setTimeout(res, 1000));
   step(mockApi).then(() => { // do something });
 })
 
-// pass a promise which would become fulfilled when it's time to cancel
-myDispatch({ type: 'UPDATE_DOG2' }, cancelPromise);
+// pass a cancelPromise which would become fulfilled when it's time to cancel
+myDispatch({ type: 'UPDATE_DOG2' }, cancelPromise, cancelCallback);
 
 ```
 
-to some degree, cancelPromise is like AbortController
-what will happen when cancelPromise is fulfilled? 👇
+to some degree, cancelPromise is like AbortController to fetch\
+what will happen when cancelPromise become fulfilled? 👇\
 all of the pending step will stay at pending forever
 
 ```javascript
@@ -149,7 +150,7 @@ all of the pending step will stay at pending forever
 step(mockApi).then(() => { // will never be executed });
 ```
 
-#### some skill
+convenient way to get cancel
 
 ```javascript
 // example to create cancelPromise
