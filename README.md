@@ -128,16 +128,21 @@ const E = () => {
 ### Assignment Cancellation
 
 ```javascript
-// use step to accept a promise
-// then it will return a "cancellable" promise
-myRegister('UPDATE_DOG2', (action, { selectToPut }) => {
-  const { step } = selectToPut(track => track('dog'));
+// cancel and cancelPromise
+const [cancelPromise, cancel] = (() => {
+  let cancel = null;
+  return [new Promise(res => cancel = res), cancel];
+})();
+
+// use step to call api, and this is useful for cancellation
+myRegister('UPDATE_CANCEL', (action, { selectToPut }) => {
+  const { step } = selectToPut();
   const mockApi = new Promise(res => setTimeout(res, 1000));
   step(mockApi).then(() => { // do something });
 })
 
-// pass a cancelPromise which would become fulfilled when it's time to cancel
-myDispatch({ type: 'UPDATE_DOG2' }, cancelPromise, cancelCallback);
+setTimeout(cancel, 500); // cancelPromise would become fulfilled after 500ms
+myDispatch({ type: 'UPDATE_CANCEL' }, cancelPromise, cancelCallback);
 
 ```
 
@@ -150,24 +155,14 @@ all of the pending step will stay at pending forever
 step(mockApi).then(() => { // will never be executed });
 ```
 
-convenient way to get cancel
-
-```javascript
-// example to create cancelPromise
-const [cancelPromise, cancel] = (() => {
-  let cancel = null;
-  return [new Promise(res => cancel = res), cancel];
-})();
-```
-
 ### Assignment resolved
 
 ```javascript
-myRegister('UPDATE_DOG3', (action, { selectToPut, done }) => {
+myRegister('UPDATE_DONE', (action, { selectToPut, done }) => {
   // developer need to determine when to execute done
-  done(); // whenever
+  setTimeout(done, 3000); // whenever
 })
-myDispatch({ type: 'UPDATE_DOG3' }).then(() => console.log('done'));
+myDispatch({ type: 'UPDATE_DONE' }).then(() => console.log('done'));
 
 ```
 

@@ -11,7 +11,7 @@ export const createInstance = (state, debugTarget) => {
   const updaters = new Set();
   const assignmentMap = new Map();
   const onSelfUpdate = [];
-  let pendingUpdate = false;
+  let pendingCheck = false;
   const [checkPromise, checkResolve] = newPromise();
   const checkShouldUpdate = next => {
     if (Object.is(state, next)) return Promise.resolve();
@@ -20,10 +20,10 @@ export const createInstance = (state, debugTarget) => {
     const cbPromise = new Promise(res => {
       Promise.all([onSelfUpdate.map(cb => Promise.resolve(cb()))]).then(res);
     });
-    if (pendingUpdate) return Promise.all([checkPromise, cbPromise]);
-    pendingUpdate = true;
+    if (pendingCheck) return Promise.all([checkPromise, cbPromise]);
+    pendingCheck = true;
     queueMicrotask(() => {
-      pendingUpdate = false;
+      pendingCheck = false;
       Promise.all([...updaters].map(doCheck => doCheck())).then(checkResolve);
     })
     return Promise.all([checkPromise, cbPromise]); // @todo 不知道太多promise会不会有性能问题
@@ -189,12 +189,12 @@ export const assemble = (parentConveyor, alias, childConveyor) => {
   if (Object.keys(parentState).find(key => key === alias))
     throw ('existing key on target conveyor state!')
   parentState[alias] = getChildState();
-  onChildUpdate.push(childValue => {
-    return parentCheckShouldUpdate({ ...parentState, [alias]: childValue });
+  onChildUpdate.push(childNode => {
+    return parentCheckShouldUpdate({ ...parentState, [alias]: childNode });
   });
-  onParentUpdate.push(parentValue => {
-    if (!Object.is(getChildState(), parentValue[alias])) {
-      return childCheckShouldUpdate(parentValue[alias]);
+  onParentUpdate.push(parentNode => {
+    if (!Object.is(getChildState(), parentNode[alias])) {
+      return childCheckShouldUpdate(parentNode[alias]);
     }
     return Promise.resolve();
   })
