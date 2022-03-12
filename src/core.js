@@ -11,16 +11,16 @@ export const createInstance = (state, debugTarget) => {
   const updaters = new Set();
   const assignmentMap = new Map();
   const onSelfUpdate = [];
-  let pendingUpdate = false;
+  let pendingCheck = false;
   const checkShouldUpdate = next => {
     if (Object.is(state, next)) return;
     hitSoy(state, next, debugTarget);
     state = next;
     onSelfUpdate.forEach(callback => callback());
-    if (pendingUpdate) return;
-    pendingUpdate = true;
+    if (pendingCheck) return;
+    pendingCheck = true;
     queueMicrotask(() => {
-      pendingUpdate = false;
+      pendingCheck = false;
       updaters.forEach(doCheck => doCheck());
     })
   }
@@ -179,12 +179,12 @@ export const assemble = (parentConveyor, alias, childConveyor) => {
   if (Object.keys(parentState).find(key => key === alias))
     throw ('existing key on target conveyor state!')
   parentState[alias] = getChildState();
-  onChildUpdate.push(childValue => {
-    parentCheckShouldUpdate({ ...parentState, [alias]: childValue });
+  onChildUpdate.push(childNode => {
+    parentCheckShouldUpdate({ ...parentState, [alias]: childNode });
   });
-  onParentUpdate.push(parentValue => {
-    if (!Object.is(getChildState(), parentValue[alias])) {
-      childCheckShouldUpdate(parentValue[alias]);
+  onParentUpdate.push(parentNode => {
+    if (!Object.is(getChildState(), parentNode[alias])) {
+      childCheckShouldUpdate(parentNode[alias]);
     }
   })
 }
