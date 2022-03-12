@@ -3,35 +3,37 @@ import { getNewState, hitSoy, newPromise, selectedChanged } from './utils';
 
 const GET_STATE = Symbol();
 const CHECK_UPDATE = Symbol();
-const ON_UPDATE = Symbol();
+const ON_CHECK = Symbol();
 const UPDATERS = Symbol();
 const ASSIGN_MAP = Symbol();
 
 export const createInstance = (state, debugTarget) => {
   const updaters = new Set();
   const assignmentMap = new Map();
-  const onSelfUpdate = [];
-  let pendingCheck = false;
-  const [checkPromise, checkResolve] = newPromise();
+  const onCheckUpdate = [];
+  let checkPromise, checkResolve;
   const checkShouldUpdate = next => {
     if (Object.is(state, next)) return Promise.resolve();
     hitSoy(state, next, debugTarget);
     state = next;
     const cbPromise = new Promise(res => {
-      Promise.all([onSelfUpdate.map(cb => Promise.resolve(cb()))]).then(res);
+      Promise.all([onCheckUpdate.map(cb => Promise.resolve(cb()))]).then(res);
     });
-    if (pendingCheck) return Promise.all([checkPromise, cbPromise]);
-    pendingCheck = true;
+    if (checkPromise) return Promise.all([checkPromise, cbPromise]);
+    [checkPromise, checkResolve] = newPromise();
     queueMicrotask(() => {
-      pendingCheck = false;
-      Promise.all([...updaters].map(doCheck => doCheck())).then(checkResolve);
+      checkPromise = null;
+      Promise.all([...updaters].map(doCheck => doCheck())).then(() => {
+        checkResolve();
+        checkResolve = null;
+      });
     })
-    return Promise.all([checkPromise, cbPromise]); // @todo 不知道太多promise会不会有性能问题
+    return Promise.all([checkPromise, cbPromise]);
   }
   const selfInstance = {
     [GET_STATE]: () => state,
     [CHECK_UPDATE]: checkShouldUpdate,
-    [ON_UPDATE]: onSelfUpdate,
+    [ON_CHECK]: onCheckUpdate,
     [UPDATERS]: updaters,
     [ASSIGN_MAP]: assignmentMap,
   };
@@ -83,8 +85,10 @@ export const useConveyor = (selector, conveyor) => {
     return select;
   }
   const selected = execSelect();
+
   const renderRef = useRef(null);
   renderRef.current && renderRef.current();
+  renderRef.current = null;
   const [, forceUpdate] = useReducer(x => x + 1, 0);
   const doCheck = () => {
     if (selector && !selectedChanged(selected, execSelect())) return Promise.resolve();
@@ -92,7 +96,6 @@ export const useConveyor = (selector, conveyor) => {
     forceUpdate(); // first time forceUpdate render sync and takes more time
     return ret;
   }
-
   useEffect(() => {
     updaters.add(doCheck);
     return () => updaters.delete(doCheck);
@@ -122,8 +125,7 @@ export const register = (conveyor, type, assignment) => {
 export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
   const { [GET_STATE]: getRoot,
     [CHECK_UPDATE]: checkShouldUpdate,
-    [ASSIGN_MAP]: assignmentMap,
-    [UPDATERS]: updaters } = conveyor;
+    [ASSIGN_MAP]: assignmentMap } = conveyor;
   const assignment = assignmentMap.get(action.type);
   if (!assignment) throw ('no type registered!');
   let cancelled = false;
@@ -177,11 +179,11 @@ export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
 export const assemble = (parentConveyor, alias, childConveyor) => {
   const { [GET_STATE]: getChildState,
     [CHECK_UPDATE]: childCheckShouldUpdate,
-    [ON_UPDATE]: onChildUpdate } = childConveyor;
+    [ON_CHECK]: onChildCheck } = childConveyor;
   const {
     [GET_STATE]: getParentState,
     [CHECK_UPDATE]: parentCheckShouldUpdate,
-    [ON_UPDATE]: onParentUpdate
+    [ON_CHECK]: onParentCheck
   } = parentConveyor;
   const parentState = getParentState();
   if (Object.prototype.toString.call(parentState) !== '[object Object]')
@@ -189,10 +191,10 @@ export const assemble = (parentConveyor, alias, childConveyor) => {
   if (Object.keys(parentState).find(key => key === alias))
     throw ('existing key on target conveyor state!')
   parentState[alias] = getChildState();
-  onChildUpdate.push(childNode => {
+  onChildCheck.push(childNode => {
     return parentCheckShouldUpdate({ ...parentState, [alias]: childNode });
   });
-  onParentUpdate.push(parentNode => {
+  onParentCheck.push(parentNode => {
     if (!Object.is(getChildState(), parentNode[alias])) {
       return childCheckShouldUpdate(parentNode[alias]);
     }
