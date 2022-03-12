@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useCallback, useRef } from 'react';
-import { getNewState, hitSoy, selectedChanged } from './utils';
+import { getNewState, hitSoy, newPromise, selectedChanged } from './utils';
 
 const GET_STATE = Symbol();
 const CHECK_UPDATE = Symbol();
@@ -12,17 +12,21 @@ export const createInstance = (state, debugTarget) => {
   const assignmentMap = new Map();
   const onSelfUpdate = [];
   let pendingUpdate = false;
+  const [checkPromise, checkResolve] = newPromise();
   const checkShouldUpdate = next => {
-    if (Object.is(state, next)) return;
+    if (Object.is(state, next)) return Promise.resolve();
     hitSoy(state, next, debugTarget);
     state = next;
-    onSelfUpdate.forEach(callback => callback());
-    if (pendingUpdate) return;
+    const cbPromise = new Promise(res => {
+      Promise.all([onSelfUpdate.map(cb => Promise.resolve(cb()))]).then(res);
+    });
+    if (pendingUpdate) return Promise.all([checkPromise, cbPromise]);
     pendingUpdate = true;
     queueMicrotask(() => {
       pendingUpdate = false;
-      updaters.forEach(doCheck => doCheck());
+      Promise.all([...updaters].map(doCheck => doCheck())).then(checkResolve);
     })
+    return Promise.all([checkPromise, cbPromise]); // @todo 不知道太多promise会不会有性能问题
   }
   const selfInstance = {
     [GET_STATE]: () => state,
@@ -79,10 +83,14 @@ export const useConveyor = (selector, conveyor) => {
     return select;
   }
   const selected = execSelect();
+  const renderRef = useRef(null);
+  renderRef.current && renderRef.current();
   const [, forceUpdate] = useReducer(x => x + 1, 0);
   const doCheck = () => {
-    if (selector && !selectedChanged(selected, execSelect())) return;
-    forceUpdate();
+    if (selector && !selectedChanged(selected, execSelect())) return Promise.resolve();
+    const ret = new Promise(res => renderRef.current = res);
+    forceUpdate(); // first time forceUpdate render sync and takes more time
+    return ret;
   }
 
   useEffect(() => {
@@ -112,7 +120,10 @@ export const register = (conveyor, type, assignment) => {
  * dispatch an assignment to do
  */
 export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
-  const { [GET_STATE]: getRoot, [CHECK_UPDATE]: checkShouldUpdate, [ASSIGN_MAP]: assignmentMap } = conveyor;
+  const { [GET_STATE]: getRoot,
+    [CHECK_UPDATE]: checkShouldUpdate,
+    [ASSIGN_MAP]: assignmentMap,
+    [UPDATERS]: updaters } = conveyor;
   const assignment = assignmentMap.get(action.type);
   if (!assignment) throw ('no type registered!');
   let cancelled = false;
@@ -127,6 +138,7 @@ export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
     pathArr.push({ ret, path });
     return ret;
   }
+  let putPromise = null;
   const selectToPut = selector => {
     const execSelect = () => {
       if (!selector) return getRoot();
@@ -138,7 +150,7 @@ export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
       select: execSelect,
       put: work => {
         const newState = getNewState(getRoot(), execSelect(), pathArr, work);
-        checkShouldUpdate(newState);
+        putPromise = checkShouldUpdate(newState);
       },
       state: getRoot,
       step: promise => new Promise((resolve, reject) => {
@@ -149,25 +161,23 @@ export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
       })
     }
   }
-  let done = null;
-  let fail = null;
-  const ret = new Promise((res, rej) => {
-    done = res;
-    fail = rej;
-  });
-  assignment(action, { selectToPut, done, fail });
-  return ret;
+
+  const [dispatchPromise, dispatchResolve, dispatchReject] = newPromise();
+  const done = () => {
+    // putPromise is the latest prommise which created from put
+    putPromise.then(dispatchResolve);
+  }
+  assignment(action, { selectToPut, done, fail: dispatchReject });
+  return dispatchPromise;
 }
 
 /**
  * assemble sub conveyor
  */
 export const assemble = (parentConveyor, alias, childConveyor) => {
-  const {
-    [GET_STATE]: getChildState,
+  const { [GET_STATE]: getChildState,
     [CHECK_UPDATE]: childCheckShouldUpdate,
-    [ON_UPDATE]: onChildUpdate
-  } = childConveyor;
+    [ON_UPDATE]: onChildUpdate } = childConveyor;
   const {
     [GET_STATE]: getParentState,
     [CHECK_UPDATE]: parentCheckShouldUpdate,
@@ -180,11 +190,12 @@ export const assemble = (parentConveyor, alias, childConveyor) => {
     throw ('existing key on target conveyor state!')
   parentState[alias] = getChildState();
   onChildUpdate.push(childValue => {
-    parentCheckShouldUpdate({ ...parentState, [alias]: childValue });
+    return parentCheckShouldUpdate({ ...parentState, [alias]: childValue });
   });
   onParentUpdate.push(parentValue => {
     if (!Object.is(getChildState(), parentValue[alias])) {
-      childCheckShouldUpdate(parentValue[alias]);
+      return childCheckShouldUpdate(parentValue[alias]);
     }
+    return Promise.resolve();
   })
 }

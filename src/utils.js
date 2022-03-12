@@ -3,7 +3,7 @@ import produce from 'immer';
 /**
  * compare changes for selected
  */
- export const selectedChanged = (preSelected, nextSelected) => {
+export const selectedChanged = (preSelected, nextSelected) => {
   if (Object.prototype.toString.call(preSelected) === '[object Object]') {
     return Object.entries(preSelected)
       // for task props as function, the state it depends will always be latest, so ignore it
@@ -69,4 +69,13 @@ export const hitSoy = (preState, nextState, [debugProps, debugEntry]) => {
     return collected;
   }, []);
   if (changedProps.length) debugEntry(changedProps);
+}
+
+export const newPromise = () => {
+  let resolve = null;
+  let reject = null;
+  return [new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  }), resolve, reject];
 }
