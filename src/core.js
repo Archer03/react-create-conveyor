@@ -80,37 +80,33 @@ export const useConveyor = (selector, conveyor) => {
     if (!selector) return { selected: getRoot() };
     const pathArr = [];
     let selected = selector({ state: getRoot, track: track.bind(null, pathArr), task, memo });
-    let $draft = null;
-    if (isPlainObject(selected) && selected.hasOwnProperty('$draft')) {
-      if (Object.keys(selected)[0] !== '$draft') {
-        throw ('$draft should be set to the first key in selector!');
+    // @todo trackAsRet not matched exactly when primitive
+    const trackAsRet = pathArr.length === 1 && nextSelected === pathArr[0].ret;
+    if (pathArr.length > 1) {
+      if (!isPlainObject(selected)) {
+        throw ('please return an object to rebuild mapping for selector when track more than one prop!')
       }
-      $draft = selected.$draft;
-      const trackAsDraft = pathArr.length === 1 && $draft === pathArr[0].ret; // not allowed
-      if (!isPlainObject($draft) || trackAsDraft) {
-        throw ('$draft only accept a plain object to rebuild a new mapping!');
-      }
-      if (isPlainObject($draft) && pathArr.length === 0) {
-        throw ('please track props in $draft!');
-      }
-      if (pathArr.length > Object.keys($draft).length) {
-        throw ('please track props in $draft!');
-      }
-      const hasNonTrackPropInDraft = Object.values($draft).some((value, index) => {
-        return value !== pathArr[index].ret
+      const isAllTrackPropTop = !Object.values(selected).some((value, index) => {
+        return value !== pathArr[index].ret;
       });
-      if (hasNonTrackPropInDraft) {
-        throw ('props of $draft should be all tracked!');
+      if (isAllTrackPropTop) {
+        throw ('tracked props should be list at the top in selector!');
       }
-      let key = Object.keys($draft).find(key => selected.hasOwnProperty(key));
-      if (key !== undefined) {
-        throw (`existing key: '${key}' in selector!`);
+    }
+    if (pathArr.length === 1 && !trackAsRet) {
+      if (!isPlainObject(selected)) {
+        throw ('please return an object to rebuild mapping for selector!')
+      } else {
+        const isAllTrackPropTop = !Object.values(selected).some((value, index) => {
+          return value !== pathArr[index].ret;
+        });
+        if (isAllTrackPropTop) {
+          throw ('tracked props should be list at the top in selector!');
+        }
       }
-      selected = { ...selected, ...$draft };
-      delete selected.$draft;
     }
     memoIndex.current = 0;
-    return { selected, $draft, pathArr };
+    return { selected, pathArr, trackAsRet };
   }
   const { selected } = execSelect();
 
@@ -172,8 +168,10 @@ export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
     const execSelect = () => {
       if (!selector) return getRoot();
       const pathArr = [];
-      const selected = selector(track.bind(null, pathArr)); // only track is allowed, no $draft is more clear
-      return { selected, $draft: selected, pathArr };
+      const selected = selector(track.bind(null, pathArr));
+      // @todo trackAsRet not matched exactly when primitive
+      const trackAsRet = pathArr.length === 1 && nextSelected === pathArr[0].ret;
+      return { selected, pathArr, trackAsRet };
     }
     return {
       select: () => execSelect().selected,

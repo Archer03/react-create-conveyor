@@ -4,9 +4,8 @@ import produce from 'immer';
  * compare changes for selected
  */
 export const selectedChanged = (preSelected, execSelect) => {
-  const { selected: nextSelected, pathArr } = execSelect();
-  const trackAsRet = pathArr.length === 1 && nextSelected === pathArr[0].ret;
-  if (!isPlainObject(preSelected) || trackAsRet) {
+  const { selected: nextSelected, trackAsRet } = execSelect();
+  if (!isPlainObject(nextSelected) || trackAsRet) {
     return !Object.is(preSelected, nextSelected);
   }
   return Object.entries(preSelected)
@@ -19,21 +18,22 @@ export const selectedChanged = (preSelected, execSelect) => {
  * create new root state
  */
 export const getNewState = (curRoot, execSelect, work) => {
-  const { selected, $draft, pathArr } = execSelect();
-  const $draftHas = isPlainObject($draft);
-  // @todo trackAsRet not matched exactly when primitive
-  const trackAsRet = pathArr.length === 1 && selected === pathArr[0].ret; // useMyData(({ track }) => track('dog))
+  const { selected, pathArr, trackAsRet } = execSelect();
   let newState = null;
   if (typeof work === 'function') {
     let toBeModify = null;
-    if ($draftHas) {
-      toBeModify = $draft;
-    } else if (trackAsRet) {
-      toBeModify = pathArr[0].ret;
-    } else if (pathArr.length === 0) { // no selector passed: useMyData(), or no prop tracked
+    if (pathArr.length === 0) {
       toBeModify = curRoot;
     } else {
-      throw ('please tract props in $draft, or just return tracked value for selector, or not to track at all!');
+      toBeModify = selected;
+      if (isPlainObject(selected) && !trackAsRet) {
+        toBeModify = { ...selected };
+        Object.keys(toBeModify).forEach((key, index) => {
+          if (index >= pathArr.length) {
+            Object.defineProperty(toBeModify, key, { writable: false });
+          }
+        });
+      }
     }
     const nextSlice = isPrimitive(toBeModify) ? work(toBeModify) : produce(toBeModify, work);
     if (pathArr.length === 0) {
@@ -63,7 +63,7 @@ export const syncChangesToRootByPath = (curRoot, nextSlice, pathArr, justSetValu
       paths.reduce((p, v) => p[v], draft)[lastKey] = nextSlice;
     } else {
       Object.entries(nextSlice).forEach(([key, value], index) => {
-        if (index > pathArr.length - 1) return; // todo 有没有其他方式对应key?
+        if (index >= pathArr.length) return;
         const paths = pathArr[index].path.slice();
         const lastKey = paths.pop();
         paths.reduce((p, v) => p[v], draft)[lastKey] = value;

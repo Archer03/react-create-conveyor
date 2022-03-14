@@ -63,16 +63,13 @@ const C = () => {
   </div>
 }
 
-// use $draft if multiple props to modify
 // use memo to cache calculation
 // use task to define any assignment method
 const D = () => {
   const [dog, drawDog] = useMyData(({ state, track, task, memo }) => ({
-    $draft: {
-      dName: track('dog', 'name'),
-      dBreed: track('dog', 'breed'),
-      dAge: track('dog', 'age'),
-    },
+    dName: track('dog', 'name'),
+    dBreed: track('dog', 'breed'),
+    dAge: track('dog', 'age'),
     fullName: state().dog.name + state().dog.breed,
     // calculation is now dependent on dog.age
     memoName: memo(() => state().dog.name + state().dog.breed, [state().dog.age]),
