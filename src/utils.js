@@ -4,72 +4,64 @@ import produce from 'immer';
  * compare changes for selected
  */
 export const selectedChanged = (preSelected, execSelect) => {
-  const { selected: nextSelected, trackAsRet } = execSelect();
-  if (!isPlainObject(nextSelected) || trackAsRet) {
-    return !Object.is(preSelected, nextSelected);
+  const { selected, selectorRet, trackIsRet } = execSelect();
+  if (!trackIsRet && selectorRet instanceof Map) {
+    return Object.entries(preSelected)
+      // for task props as function, the state will always be latest, so ignore it
+      .filter(([, value]) => typeof value !== 'function') // @todo 函数可能依赖了闭包变量，所以不能忽略？
+      .some(([key, value]) => !Object.is(value, selected[key]));
   }
-  return Object.entries(preSelected)
-    // for task props as function, the state it depends will always be latest, so ignore it
-    .filter(([, value]) => typeof value !== 'function')
-    .some(([key, value]) => !Object.is(value, nextSelected[key]));
+  return !Object.is(preSelected, selected);
 }
 
 /**
  * create new root state
  */
 export const getNewState = (curRoot, execSelect, work) => {
-  const { selected, pathArr, trackAsRet } = execSelect();
+  const { draft, selectorRet, trackIsRet } = execSelect();
+  // only 3 case is allowed here: draft is root, track is ret, use mapping
   let newState = null;
   if (typeof work === 'function') {
-    let toBeModify = null;
-    if (pathArr.length === 0) {
-      toBeModify = curRoot;
-    } else {
-      toBeModify = selected;
-      if (isPlainObject(selected) && !trackAsRet) {
-        toBeModify = { ...selected };
-        Object.keys(toBeModify).forEach((key, index) => {
-          if (index >= pathArr.length) {
-            Object.defineProperty(toBeModify, key, { writable: false });
-          }
-        });
-      }
-    }
-    const nextSlice = isPrimitive(toBeModify) ? work(toBeModify) : produce(toBeModify, work);
-    if (pathArr.length === 0) {
+    const nextSlice = isPrimitive(draft) ? work(draft) : produce(draft, work);
+    if (curRoot === draft) {
       newState = nextSlice;
+    } else if (trackIsRet) {
+      newState = produceRootByOnePath(curRoot, nextSlice, selectorRet);
     } else {
-      newState = syncChangesToRootByPath(curRoot, nextSlice, pathArr, trackAsRet);
+      newState = produceRootByMapping(curRoot, nextSlice, selectorRet);
     }
-  } else if (selected !== curRoot) {
-    // this happens only when selector works with new mapping passed
-    if (pathArr.length !== 1) throw ('to set value directly, please return single a value for selector!');
-    newState = syncChangesToRootByPath(curRoot, work, pathArr, true);
-  } else { // work is new root state
+  } else if (curRoot === draft) {
     newState = work;
+  } else if (trackIsRet) {
+    newState = produceRootByOnePath(curRoot, work, selectorRet);
+  } else {
+    throw ('to set value directly, do not return a map for selector!');
   }
   return newState;
 }
 
 /**
- * sync changes from slice to root state
+ * update changes to root state by map
  */
-export const syncChangesToRootByPath = (curRoot, nextSlice, pathArr, justSetValue) => {
-  if (!pathArr.length) throw ('track prop needed!'); // throw for savety
+export const produceRootByMapping = (curRoot, nextSlice, mapping) => {
   return produce(curRoot, draft => {
-    if (!isPlainObject(curRoot) || justSetValue) {
-      const paths = pathArr[0].path.slice();
+    Object.entries(nextSlice).forEach(([key, value]) => {
+      const paths = mapping.get(key).slice();
       const lastKey = paths.pop();
-      paths.reduce((p, v) => p[v], draft)[lastKey] = nextSlice;
-    } else {
-      Object.entries(nextSlice).forEach(([key, value], index) => {
-        if (index >= pathArr.length) return;
-        const paths = pathArr[index].path.slice();
-        const lastKey = paths.pop();
-        paths.reduce((p, v) => p[v], draft)[lastKey] = value;
-      });
-    }
+      paths.reduce((p, v) => p[v], draft)[lastKey] = value;
+    });
   })
+}
+
+/**
+ * modify a prop value for root state
+ */
+export const produceRootByOnePath = (curRoot, next, path) => {
+  return produce(curRoot, draft => {
+    const keys = path.slice();
+    const lastKey = keys.pop();
+    keys.reduce((p, v) => p[v], draft)[lastKey] = next;
+  });
 }
 
 /**

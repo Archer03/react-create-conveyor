@@ -48,11 +48,10 @@ export const createInstance = (state, debugTarget) => {
  */
 export const useConveyor = (selector, conveyor) => {
   const { [GET_STATE]: getRoot, [CHECK_UPDATE]: checkShouldUpdate, [UPDATERS]: updaters } = conveyor;
-  const track = (pathArr, ...path) => {
+  const track = (pathSet, ...path) => {
     if (path.length === 0) throw ('path needed!');
-    const ret = path.reduce((p, v) => p[v], getRoot());
-    pathArr.push({ ret, path });
-    return ret;
+    pathSet.add(path)
+    return path;
   }
   const task = (reducer => {
     return (...params) => {
@@ -76,37 +75,34 @@ export const useConveyor = (selector, conveyor) => {
     }
   }
 
-  const execSelect = isDoCheck => { // @todo no need to check usage error during doCheck
-    if (!selector) return { selected: getRoot() };
-    const pathArr = [];
-    let selected = selector({ state: getRoot, track: track.bind(null, pathArr), task, memo });
-    // @todo trackAsRet not matched exactly when primitive
-    const trackAsRet = pathArr.length === 1 && nextSelected === pathArr[0].ret;
-    if (pathArr.length > 1) {
-      if (!isPlainObject(selected)) {
-        throw ('please return an object to rebuild mapping for selector when track more than one prop!')
-      }
-      const isAllTrackPropTop = !Object.values(selected).some((value, index) => {
-        return value !== pathArr[index].ret;
-      });
-      if (isAllTrackPropTop) {
-        throw ('tracked props should be list at the top in selector!');
-      }
+  const execSelect = () => {
+    if (!selector) return { selected: getRoot(), draft: getRoot(), trackIsRet: false };
+    if (!isPlainObject(getRoot())) {
+      throw ('only state of plain object deserves a selector!');
     }
-    if (pathArr.length === 1 && !trackAsRet) {
-      if (!isPlainObject(selected)) {
-        throw ('please return an object to rebuild mapping for selector!')
-      } else {
-        const isAllTrackPropTop = !Object.values(selected).some((value, index) => {
-          return value !== pathArr[index].ret;
-        });
-        if (isAllTrackPropTop) {
-          throw ('tracked props should be list at the top in selector!');
+    const pathSet = new Set();
+    let selectorRet = selector({ state: getRoot, track: track.bind(null, pathSet), task, memo });
+    let selected = {};
+    let draft = {};
+    const trackIsRet = pathSet.has(selectorRet);
+    if (trackIsRet) {
+      const path = selectorRet;
+      selected = draft = path.reduce((p, v) => p[v], getRoot());
+    } else if (selectorRet instanceof Map) {
+      const mapping = selectorRet;
+      [...mapping.entries()].forEach(([key, value]) => {
+        if (pathSet.has(value)) {
+          selected[key] = draft[key] = value.reduce((p, v) => p[v], getRoot());
+        } else {
+          selected[key] = value;
         }
-      }
+      })
+      if (Object.keys(draft).length === 0) draft = getRoot();
+    } else {
+      throw ('selector could only return a map or a tracked prop!');
     }
     memoIndex.current = 0;
-    return { selected, pathArr, trackAsRet };
+    return { selected, draft, selectorRet, trackIsRet };
   }
   const { selected } = execSelect();
 
@@ -169,9 +165,7 @@ export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
       if (!selector) return getRoot();
       const pathArr = [];
       const selected = selector(track.bind(null, pathArr));
-      // @todo trackAsRet not matched exactly when primitive
-      const trackAsRet = pathArr.length === 1 && nextSelected === pathArr[0].ret;
-      return { selected, pathArr, trackAsRet };
+      return { selected, pathArr };
     }
     return {
       select: () => execSelect().selected,
