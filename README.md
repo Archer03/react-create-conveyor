@@ -43,7 +43,6 @@ const A = () => {
 
 // pass value to setCount instead of producer function
 // but this is allowed only when single prop tracked
-// and if it is primitive value, usage like setCount(count => count++) dosen't work
 const B = () => {
   const [count, setCount] = useMyData(({ track }) => track('count'));
   return <button onClick={() => setCount(count + 1)}>B{count}</button>
@@ -64,33 +63,36 @@ const C = () => {
   </div>
 }
 
+// use $draft if multiple props to modify
 // use memo to cache calculation
 // use task to define any assignment method
 const D = () => {
   const [dog, drawDog] = useMyData(({ state, track, task, memo }) => ({
-    name: track('dog', 'name'),
-    breed: track('dog', 'breed'),
-    age: track('dog', 'age'),
+    $draft: {
+      dName: track('dog', 'name'),
+      dBreed: track('dog', 'breed'),
+      dAge: track('dog', 'age'),
+    },
     fullName: state().dog.name + state().dog.breed,
     // calculation is now dependent on dog.age
     memoName: memo(() => state().dog.name + state().dog.breed, [state().dog.age]),
     myDisptch: task((draft, { type, payload }) => { // redux style
       if (type === 'RESET') {
-        draft.age = payload;
-        draft.name = 'xiao bai';
-        draft.breed = '🐶';
+        draft.dAge = payload;
+        draft.dName = 'xiao bai';
+        draft.dBreed = '🐶';
       }
     })
   }));
   return <div>
-    <button onClick={() => drawDog(draftDog => {
-      draftDog.name = 'da huang'; // just draw it in producer
-      draftDog.breed += '🐕'; // next immutable state created by powerful immerJS
+    <button onClick={() => drawDog(draft => {
+      draft.dName = 'da huang'; // just draw it in producer
+      draft.dBreed += '🐕'; // next immutable state created by powerful immerJS
     })}>D {dog.fullName}</button>
     memo:{dog.memoName}
     <button onClick={() => 
       dog.myDisptch({ type: 'RESET', payload: 2 })
-    }>reset {dog.age}</button>
+    }>reset {dog.dAge}</button>
   </div>
 }
 ```
@@ -128,7 +130,7 @@ const E = () => {
 ### Assignment Cancellation
 
 ```javascript
-// cancel and cancelPromise
+// cancelPromise and calcel
 const [cancelPromise, cancel] = (() => {
   let cancel = null;
   return [new Promise(res => cancel = res), cancel];
@@ -141,8 +143,8 @@ myRegister('UPDATE_CANCEL', (action, { selectToPut }) => {
   step(mockApi).then(() => { // do something });
 })
 
-setTimeout(cancel, 500); // cancelPromise would become fulfilled after 500ms
 myDispatch({ type: 'UPDATE_CANCEL' }, cancelPromise, cancelCallback);
+setTimeout(cancel, 500); // cancelPromise would become fulfilled after 500ms
 
 ```
 
@@ -151,7 +153,7 @@ what will happen when cancelPromise become fulfilled? 👇\
 all of the pending step will stay at pending forever
 
 ```javascript
-// for example, if cancellation is earlier than mockApi
+// for example 500ms < 1000ms, so cancellation is earlier than mockApi
 step(mockApi).then(() => { // will never be executed });
 ```
 
@@ -172,7 +174,7 @@ myDispatch({ type: 'UPDATE_DONE' }).then(() => console.log('done'));
 const [useGlobal, { assemble: globalAssemble }] = createConveyor({}); // created a global conveyor
 const [, subInstance] = createConveyor(666); // two weeks later created a sub conveyor
 
-// three month later found the sub conveyor was accessed more frequently than you thought at the begining
+// three month later found the sub conveyor was accessed more frequently than you thought at the beginning
 globalAssemble('assembledNumber', subInstance); // just assemble it, it's ok
 
 const F = () => {
@@ -189,7 +191,7 @@ Let's see something useful
 // provide path of prop for the second param
 // multiple props is allowed, as it is a 2D array
 // just debug happily
-// and with function call stack, you can find out where changes happened exactly
+// and with breaking point, to find out where changes happened exactly in function call stack
 createConveyor({ dog: { age: 2 } }, [['dog', 'age']], changed => {
   console.log(changed); // consle log: [{"pre":2,"next":3}]
 })

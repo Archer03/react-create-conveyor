@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useCallback, useRef } from 'react';
-import { getNewState, hitSoy, newPromise, selectedChanged } from './utils';
+import { getNewState, hitSoy, isPlainObject, newPromise, selectedChanged } from './utils';
 
 const GET_STATE = Symbol();
 const CHECK_UPDATE = Symbol();
@@ -48,8 +48,7 @@ export const createInstance = (state, debugTarget) => {
  */
 export const useConveyor = (selector, conveyor) => {
   const { [GET_STATE]: getRoot, [CHECK_UPDATE]: checkShouldUpdate, [UPDATERS]: updaters } = conveyor;
-  const pathArr = [];
-  const track = (...path) => {
+  const track = (pathArr, ...path) => {
     if (path.length === 0) throw ('path needed!');
     const ret = path.reduce((p, v) => p[v], getRoot());
     pathArr.push({ ret, path });
@@ -58,7 +57,7 @@ export const useConveyor = (selector, conveyor) => {
   const task = (reducer => {
     return (...params) => {
       const work = draft => reducer(draft, ...params);
-      const newState = getNewState(getRoot(), execSelect(), pathArr, work);
+      const newState = getNewState(getRoot(), execSelect, work);
       checkShouldUpdate(newState);
     }
   })
@@ -77,21 +76,50 @@ export const useConveyor = (selector, conveyor) => {
     }
   }
 
-  const execSelect = () => {
-    if (!selector) return getRoot();
-    pathArr.length = 0;
-    const select = selector({ state: getRoot, track, task, memo });
+  const execSelect = isDoCheck => { // @todo no need to check usage error during doCheck
+    if (!selector) return { selected: getRoot() };
+    const pathArr = [];
+    let selected = selector({ state: getRoot, track: track.bind(null, pathArr), task, memo });
+    let $draft = null;
+    if (isPlainObject(selected) && selected.hasOwnProperty('$draft')) {
+      if (Object.keys(selected)[0] !== '$draft') {
+        throw ('$draft should be set to the first key in selector!');
+      }
+      $draft = selected.$draft;
+      const trackAsDraft = pathArr.length === 1 && $draft === pathArr[0].ret; // not allowed
+      if (!isPlainObject($draft) || trackAsDraft) {
+        throw ('$draft only accept a plain object to rebuild a new mapping!');
+      }
+      if (isPlainObject($draft) && pathArr.length === 0) {
+        throw ('please track props in $draft!');
+      }
+      if (pathArr.length > Object.keys($draft).length) {
+        throw ('please track props in $draft!');
+      }
+      const hasNonTrackPropInDraft = Object.values($draft).some((value, index) => {
+        return value !== pathArr[index].ret
+      });
+      if (hasNonTrackPropInDraft) {
+        throw ('props of $draft should be all tracked!');
+      }
+      let key = Object.keys($draft).find(key => selected.hasOwnProperty(key));
+      if (key !== undefined) {
+        throw (`existing key: '${key}' in selector!`);
+      }
+      selected = { ...selected, ...$draft };
+      delete selected.$draft;
+    }
     memoIndex.current = 0;
-    return select;
+    return { selected, $draft, pathArr };
   }
-  const selected = execSelect();
+  const { selected } = execSelect();
 
   const renderRef = useRef(null);
   renderRef.current && renderRef.current();
   renderRef.current = null;
   const [, forceUpdate] = useReducer(x => x + 1, 0);
   const doCheck = () => {
-    if (selector && !selectedChanged(selected, execSelect())) return Promise.resolve();
+    if (selector && !selectedChanged(selected, execSelect)) return Promise.resolve();
     const ret = new Promise(res => renderRef.current = res);
     forceUpdate(); // first time forceUpdate render sync and takes more time
     return ret;
@@ -104,7 +132,7 @@ export const useConveyor = (selector, conveyor) => {
   return [
     selected,
     useCallback(work => {
-      const newState = getNewState(getRoot(), execSelect(), pathArr, work);
+      const newState = getNewState(getRoot(), execSelect, work);
       checkShouldUpdate(newState);
     }, [selector])
   ];
@@ -133,8 +161,7 @@ export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
     cancelled = true;
     cancelCallback && cancelCallback();
   });
-  const pathArr = [];
-  const track = (...path) => {
+  const track = (pathArr, ...path) => {
     if (path.length === 0) throw ('path needed!');
     const ret = path.reduce((p, v) => p[v], getRoot());
     pathArr.push({ ret, path });
@@ -144,14 +171,14 @@ export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
   const selectToPut = selector => {
     const execSelect = () => {
       if (!selector) return getRoot();
-      pathArr.length = 0; // to keep pathArr info latest
-      return selector(track);
+      const pathArr = [];
+      const selected = selector(track.bind(null, pathArr)); // only track is allowed, no $draft is more clear
+      return { selected, $draft: selected, pathArr };
     }
-    execSelect();
     return {
-      select: execSelect,
+      select: () => execSelect().selected,
       put: work => {
-        const newState = getNewState(getRoot(), execSelect(), pathArr, work);
+        const newState = getNewState(getRoot(), execSelect, work);
         putPromise = checkShouldUpdate(newState);
       },
       state: getRoot,
@@ -186,10 +213,12 @@ export const assemble = (parentConveyor, alias, childConveyor) => {
     [ON_CHECK]: onParentCheck
   } = parentConveyor;
   const parentState = getParentState();
-  if (Object.prototype.toString.call(parentState) !== '[object Object]')
-    throw ('conveyor of primitive type could not assemble sub conveyor!')
-  if (Object.keys(parentState).find(key => key === alias))
-    throw ('existing key on target conveyor state!')
+  if (!isPlainObject(parentState)) {
+    throw ('conveyor of non-plain object type could not assemble sub conveyor!');
+  }
+  if (Object.keys(parentState).find(key => key === alias)) {
+    throw ('existing key on target conveyor state!');
+  }
   parentState[alias] = getChildState();
   onChildCheck.push(childNode => {
     return parentCheckShouldUpdate({ ...parentState, [alias]: childNode });
