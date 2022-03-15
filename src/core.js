@@ -83,8 +83,8 @@ export const useConveyor = (selector, conveyor) => {
       throw ('only state of plain object deserves a selector for mapping!');
     }
     const pathSet = new Set();
-    const vi = (key, value) => mapping.set(key, value);
-    let selectorRet = selector({ vi, track: track.bind(null, pathSet), task, memo, state: getRoot });
+    const v = (key, value) => mapping.set(key, value);
+    let selectorRet = selector({ v, track: track.bind(null, pathSet), task, memo, state: getRoot });
     memoIndex.current = 0;
     let selected = {};
     let draft = {};
