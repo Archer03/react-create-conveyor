@@ -47,7 +47,7 @@ const B = () => {
   return <button onClick={() => setCount(count + 1)}>B{count}</button>
 }
 
-// use map to rebuild a new selected object
+// use v, pass key & value to select a new mapping object
 // use state to get values from root state
 // use memo to cache calculation
 // use task to define any assignment method
