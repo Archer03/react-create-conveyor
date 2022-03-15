@@ -1,39 +1,42 @@
 import produce from 'immer';
+import { TRACK_AS_RET } from './core';
 
 /**
  * compare changes for selected
  */
 export const selectedChanged = (preSelected, execSelect) => {
-  const { selected, selectorRet, trackIsRet } = execSelect();
-  if (!trackIsRet && selectorRet instanceof Map) {
-    return Object.entries(preSelected)
-      // for task props as function, the state will always be latest, so ignore it
-      .filter(([, value]) => typeof value !== 'function') // @todo 函数可能依赖了闭包变量，所以不能忽略？
-      .some(([key, value]) => !Object.is(value, selected[key]));
+  const { selected, mapping } = execSelect();
+  const singlePath = mapping.get(TRACK_AS_RET);
+  if (singlePath) {
+    return !Object.is(preSelected, selected);
   }
-  return !Object.is(preSelected, selected);
+  return Object.entries(preSelected)
+    // for task props as function, the state will always be latest, so ignore it
+    .filter(([, value]) => typeof value !== 'function') // @todo 函数可能依赖了闭包变量，所以不能忽略？
+    .some(([key, value]) => !Object.is(value, selected[key]));
 }
 
 /**
  * create new root state
  */
 export const getNewState = (curRoot, execSelect, work) => {
-  const { draft, selectorRet, trackIsRet } = execSelect();
+  const { draft, mapping } = execSelect();
+  const singlePath = mapping.get(TRACK_AS_RET);
   // only 3 case is allowed here: draft is root, track is ret, use mapping
   let newState = null;
   if (typeof work === 'function') {
     const nextSlice = isPrimitive(draft) ? work(draft) : produce(draft, work);
     if (curRoot === draft) {
       newState = nextSlice;
-    } else if (trackIsRet) {
-      newState = produceRootByOnePath(curRoot, nextSlice, selectorRet);
+    } else if (singlePath) {
+      newState = produceRootByOnePath(curRoot, nextSlice, singlePath);
     } else {
-      newState = produceRootByMapping(curRoot, nextSlice, selectorRet);
+      newState = produceRootByMapping(curRoot, nextSlice, mapping);
     }
   } else if (curRoot === draft) {
     newState = work;
-  } else if (trackIsRet) {
-    newState = produceRootByOnePath(curRoot, work, selectorRet);
+  } else if (singlePath) {
+    newState = produceRootByOnePath(curRoot, work, singlePath);
   } else {
     throw ('to set value directly, do not return a map for selector!');
   }

@@ -6,6 +6,7 @@ const CHECK_UPDATE = Symbol();
 const ON_CHECK = Symbol();
 const UPDATERS = Symbol();
 const ASSIGN_MAP = Symbol();
+export const TRACK_AS_RET = Symbol();
 
 export const createInstance = (state, debugTarget) => {
   const updaters = new Set();
@@ -81,28 +82,29 @@ export const useConveyor = (selector, conveyor) => {
       throw ('only state of plain object deserves a selector!');
     }
     const pathSet = new Set();
-    let selectorRet = selector({ state: getRoot, track: track.bind(null, pathSet), task, memo });
+    const mapping = new Map();
+    const map = (key, value) => mapping.set(key, value);
+    let selectorRet = selector({ map, track: track.bind(null, pathSet), task, memo, state: getRoot });
     let selected = {};
     let draft = {};
-    const trackIsRet = pathSet.has(selectorRet);
-    if (trackIsRet) {
+    if (pathSet.has(selectorRet)) {
       const path = selectorRet;
+      mapping.set(TRACK_AS_RET, path);
       selected = draft = path.reduce((p, v) => p[v], getRoot());
-    } else if (selectorRet instanceof Map) {
-      const mapping = selectorRet;
+    } else if (mapping.size > 0) {
       [...mapping.entries()].forEach(([key, value]) => {
         if (pathSet.has(value)) {
           selected[key] = draft[key] = value.reduce((p, v) => p[v], getRoot());
         } else {
           selected[key] = value;
         }
-      })
+      });
       if (Object.keys(draft).length === 0) draft = getRoot();
     } else {
-      throw ('selector could only return a map or a tracked prop!');
+      throw ('please at least map a prop or return a tracked prop for selector!');
     }
     memoIndex.current = 0;
-    return { selected, draft, selectorRet, trackIsRet };
+    return { selected, draft, mapping };
   }
   const { selected } = execSelect();
 
