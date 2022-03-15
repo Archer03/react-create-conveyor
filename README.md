@@ -52,14 +52,14 @@ const B = () => {
 // use memo to cache calculation
 // use task to define any assignment method
 const C = () => {
-  const [dog, drawDog] = useMyData(({ map, state, memo, task, track }) => {
-    map('cName', track('dog', 'name'));
-    map('cBreed', track('dog', 'breed'));
-    map('cAge', track('dog', 'age'));
+  const [dog, drawDog] = useMyData(({ vi, state, memo, task, track }) => {
+    vi('cName', track('dog', 'name'));
+    vi('cBreed', track('dog', 'breed'));
+    vi('cAge', track('dog', 'age'));
     // calculation is now dependent on dog.age
-    map('fullName', state().dog.name + state().dog.breed);
-    map('memoName', memo(() => state().dog.name + state().dog.breed, [state().dog.age]));
-    map('myDisaptch', task((draft, { type, payload }) => { // redux style
+    vi('fullName', state().dog.name + state().dog.breed);
+    vi('memoName', memo(() => state().dog.name + state().dog.breed, [state().dog.age]));
+    vi('myDisaptch', task((draft, { type, payload }) => { // redux style
       if (type === 'RESET') {
         draft.cAge = payload;
         draft.cName = 'xiao bai';
@@ -82,9 +82,9 @@ const C = () => {
 // track is not necessary
 // if no prop tracked, root state passed to producer instead
 const D = () => {
-  const [{ dNum, upTen }, myUpdate] = useMyData(({ map, state, task }) => {
-    map('dNum', state().count);
-    map('upTen', task((draft) => { draft.count += 10 })) // just do it (use count but not dNum)
+  const [{ dNum, upTen }, myUpdate] = useMyData(({ vi, state, task }) => {
+    vi('dNum', state().count);
+    vi('upTen', task((draft) => { draft.count += 10 })) // just do it (use count but not dNum)
   });
   return <div>
     <button onClick={upTen}>D upTen{dNum}</button>
@@ -121,7 +121,7 @@ const E = () => {
 }
 ```
 
-### Assignment Cancellation
+### Cancellation
 
 ```javascript
 // cancelPromise and calcel
@@ -151,7 +151,7 @@ all of the pending step will stay at pending forever
 step(mockApi).then(() => { // will never be executed });
 ```
 
-### Assignment resolved
+### Resolved
 
 ```javascript
 myRegister('UPDATE_DONE', (action, { selectToPut, done }) => {
