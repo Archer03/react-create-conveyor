@@ -77,7 +77,7 @@ export const useConveyor = (selector, conveyor) => {
   }
 
   const execSelect = () => {
-    const mapping = new Map();
+    let mapping = new Map();
     if (!selector) return { selected: getRoot(), draft: getRoot(), mapping };
     if (!isPlainObject(getRoot())) {
       throw ('only state of plain object deserves a selector for mapping!');
@@ -92,7 +92,12 @@ export const useConveyor = (selector, conveyor) => {
       const path = selectorRet;
       mapping.set(TRACK_AS_RET, path);
       selected = draft = path.reduce((p, v) => p[v], getRoot());
-    } else if (mapping.size > 0) {
+      return { selected, draft, mapping };
+    }
+    if (selectorRet instanceof Map) {
+      mapping = selectorRet;
+    }
+    if (mapping.size > 0) {
       [...mapping.entries()].forEach(([key, value]) => {
         if (pathSet.has(value)) {
           selected[key] = draft[key] = value.reduce((p, v) => p[v], getRoot());

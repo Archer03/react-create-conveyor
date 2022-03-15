@@ -47,25 +47,28 @@ const B = () => {
   return <button onClick={() => setCount(count + 1)}>B{count}</button>
 }
 
-// use v, pass key & value to select a new mapping object
+// return a map to collect mappings
+// only tracked props will be added to draft, which received in the producer passed to drawDog
 // use state to get values from root state
 // use memo to cache calculation
 // use task to define any assignment method
 const C = () => {
-  const [dog, drawDog] = useMyData(({ v, state, memo, task, track }) => {
-    v('cName', track('dog', 'name'));
-    v('cBreed', track('dog', 'breed'));
-    v('cAge', track('dog', 'age'));
+  const [dog, drawDog] = useMyData(({ state, memo, task, track }) => {
+    const map = new Map();
+    map.set('cName', track('dog', 'name'));
+    map.set('cBreed', track('dog', 'breed'));
+    map.set('cAge', track('dog', 'age'));
     // calculation is now dependent on dog.age
-    v('fullName', state().dog.name + state().dog.breed);
-    v('memoName', memo(() => state().dog.name + state().dog.breed, [state().dog.age]));
-    v('myDisaptch', task((draft, { type, payload }) => { // redux style
+    map.set('fullName', state().dog.name + state().dog.breed);
+    map.set('memoName', memo(() => state().dog.name + state().dog.breed, [state().dog.age]));
+    map.set('myDisaptch', task((draft, { type, payload }) => { // redux style
       if (type === 'RESET') {
         draft.cAge = payload;
         draft.cName = 'xiao bai';
         draft.cBreed = '🐶';
       }
     }));
+    return map;
   });
   return <div>
     <button onClick={() => drawDog(draft => {
@@ -79,11 +82,12 @@ const C = () => {
   </div>
 }
 
-// track is not necessary
-// if no prop tracked, root state passed to producer instead
+// v is actually equal to use a map, nothing special
+// if no prop tracked, root state will be passed to producer instead
 const D = () => {
   const [{ dNum, upTen }, myUpdate] = useMyData(({ v, state, task }) => {
     v('dNum', state().count);
+    v('dDogName', state().dog.name);
     v('upTen', task((draft) => { draft.count += 10 })) // just do it (use count but not dNum)
   });
   return <div>
