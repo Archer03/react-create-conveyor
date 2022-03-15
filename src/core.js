@@ -77,14 +77,15 @@ export const useConveyor = (selector, conveyor) => {
   }
 
   const execSelect = () => {
-    if (!selector) return { selected: getRoot(), draft: getRoot(), trackIsRet: false };
+    const mapping = new Map();
+    if (!selector) return { selected: getRoot(), draft: getRoot(), mapping };
     if (!isPlainObject(getRoot())) {
-      throw ('only state of plain object deserves a selector!');
+      throw ('only state of plain object deserves a selector for mapping!');
     }
     const pathSet = new Set();
-    const mapping = new Map();
     const map = (key, value) => mapping.set(key, value);
     let selectorRet = selector({ map, track: track.bind(null, pathSet), task, memo, state: getRoot });
+    memoIndex.current = 0;
     let selected = {};
     let draft = {};
     if (pathSet.has(selectorRet)) {
@@ -103,7 +104,6 @@ export const useConveyor = (selector, conveyor) => {
     } else {
       throw ('please at least map a prop or return a tracked prop for selector!');
     }
-    memoIndex.current = 0;
     return { selected, draft, mapping };
   }
   const { selected } = execSelect();
@@ -155,19 +155,39 @@ export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
     cancelled = true;
     cancelCallback && cancelCallback();
   });
-  const track = (pathArr, ...path) => {
+  const track = (pathSet, ...path) => {
     if (path.length === 0) throw ('path needed!');
-    const ret = path.reduce((p, v) => p[v], getRoot());
-    pathArr.push({ ret, path });
-    return ret;
+    pathSet.add(path)
+    return path;
   }
   let putPromise = null;
   const selectToPut = selector => {
     const execSelect = () => {
-      if (!selector) return getRoot();
-      const pathArr = [];
-      const selected = selector(track.bind(null, pathArr));
-      return { selected, pathArr };
+      const mapping = new Map();
+      if (!selector) return { selected: getRoot(), draft: getRoot(), mapping };
+      if (!isPlainObject(getRoot())) {
+        throw ('only state of plain object deserves a selector for mapping!');
+      }
+      const pathSet = new Set();
+      const selectorRet = selector(track.bind(null, pathSet));
+      let selected = {};
+      if (pathSet.has(selectorRet)) {
+        const path = selectorRet;
+        mapping.set(TRACK_AS_RET, path);
+        selected = path.reduce((p, v) => p[v], getRoot());
+      } else if (!isPlainObject(selectorRet)) {
+        throw ('please return a plain object or tracked prop for selector!');
+      } else {
+        Object.entries(selectorRet).forEach(([key, value]) => {
+          if (pathSet.has(value)) {
+            selected[key] = value.reduce((p, v) => p[v], getRoot());
+            mapping.set(key, value);
+          } else {
+            throw ('only tracked prop is allowed in selectToPut for assignment!');
+          }
+        });
+      }
+      return { selected, draft: selected, mapping };
     }
     return {
       select: () => execSelect().selected,

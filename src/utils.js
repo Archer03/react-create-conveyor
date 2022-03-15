@@ -38,7 +38,7 @@ export const getNewState = (curRoot, execSelect, work) => {
   } else if (singlePath) {
     newState = produceRootByOnePath(curRoot, work, singlePath);
   } else {
-    throw ('to set value directly, do not return a map for selector!');
+    throw ('to set value directly, do not make mapping for selector!');
   }
   return newState;
 }

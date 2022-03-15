@@ -31,65 +31,66 @@ export const [useMyData] = createConveyor({
 
 // pass a selector -> useMyData(selector)
 // use track to do mapping
-// what returned from selector will be linked to setToDos
 const A = () => {
   const [toDos, setToDos] = useMyData(({ track }) => track('today', 'toDos'));
   return <button onClick={() =>
-    setToDos(toDosDraft => { // pass producer function to setToDos
-      toDosDraft.push('task2') // just push it
+    setToDos(draft => { // pass producer function to setToDos
+      draft.push('task2') // just push it
     })
   }>A{toDos}</button>
 }
 
 // pass value to setCount instead of producer function
-// but this is allowed only when single prop tracked
+// but this is allowed only when selector return a tracked prop
 const B = () => {
   const [count, setCount] = useMyData(({ track }) => track('count'));
   return <button onClick={() => setCount(count + 1)}>B{count}</button>
 }
 
-// track is not necessary
-// if no prop tracked, root state passed to producer instead
+// use map to rebuild a new selected object
+// use state to get values from root state
+// use memo to cache calculation
+// use task to define any assignment method
 const C = () => {
-  const [{ cNum, upTen }, myUpdate] = useMyData(({ state, task }) => ({
-    cNum: state().count,
-    upTen: task((draft) => { draft.count += 10 }) // just do it (use count but not cNum)
-  }));
+  const [dog, drawDog] = useMyData(({ map, state, memo, task, track }) => {
+    map('cName', track('dog', 'name'));
+    map('cBreed', track('dog', 'breed'));
+    map('cAge', track('dog', 'age'));
+    // calculation is now dependent on dog.age
+    map('fullName', state().dog.name + state().dog.breed);
+    map('memoName', memo(() => state().dog.name + state().dog.breed, [state().dog.age]));
+    map('myDisaptch', task((draft, { type, payload }) => { // redux style
+      if (type === 'RESET') {
+        draft.cAge = payload;
+        draft.cName = 'xiao bai';
+        draft.cBreed = '🐶';
+      }
+    }));
+  });
   return <div>
-    <button onClick={upTen}>C upTen{cNum}</button>
-    <button onClick={() => myUpdate(draft => { draft.dog.age++ })}>
-      noTrack dogAge+
-    </button>
+    <button onClick={() => drawDog(draft => {
+      draft.cName = 'da huang'; // just draw it in producer
+      draft.cBreed += '🐕'; // next immutable state created by powerful immerJS
+    })}>C {dog.fullName}</button>
+    memo:{dog.memoName}
+    <button onClick={() =>
+      dog.myDisaptch({ type: 'RESET', payload: 2 })
+    }>reset {dog.cAge}</button>
   </div>
 }
 
-// use memo to cache calculation
-// use task to define any assignment method
+// track is not necessary
+// if no prop tracked, root state passed to producer instead
 const D = () => {
-  const [dog, drawDog] = useMyData(({ state, track, task, memo }) => ({
-    dName: track('dog', 'name'),
-    dBreed: track('dog', 'breed'),
-    dAge: track('dog', 'age'),
-    fullName: state().dog.name + state().dog.breed,
-    // calculation is now dependent on dog.age
-    memoName: memo(() => state().dog.name + state().dog.breed, [state().dog.age]),
-    myDisptch: task((draft, { type, payload }) => { // redux style
-      if (type === 'RESET') {
-        draft.dAge = payload;
-        draft.dName = 'xiao bai';
-        draft.dBreed = '🐶';
-      }
-    })
-  }));
+  const [{ dNum, upTen }, myUpdate] = useMyData(({ map, state, task }) => {
+    map('dNum', state().count);
+    map('upTen', task((draft) => { draft.count += 10 })) // just do it (use count but not dNum)
+  });
   return <div>
-    <button onClick={() => drawDog(draft => {
-      draft.dName = 'da huang'; // just draw it in producer
-      draft.dBreed += '🐕'; // next immutable state created by powerful immerJS
-    })}>D {dog.fullName}</button>
-    memo:{dog.memoName}
-    <button onClick={() => 
-      dog.myDisptch({ type: 'RESET', payload: 2 })
-    }>reset {dog.dAge}</button>
+    <button onClick={upTen}>D upTen{dNum}</button>
+    <button onClick={() => myUpdate(draft => { draft.dog.age++ })}>
+      noTrack dogAge+
+    </button>
   </div>
 }
 ```
@@ -104,16 +105,12 @@ export const [useMyData, { register: myRegister, dispatch: myDispatch }] = creat
 })
 
 // register an assignment for current conveyor
-// select, put and state will be safe at async callback
-// you could also pass producer function or value to 'put', same as advanced usage above
 myRegister('UPDATE_DOG', (action, { selectToPut }) => {
-  const { select, put, state } = selectToPut(track => ({
-    dogAge: track('dog', 'age'),
-  }));
+  const { select, put, state } = selectToPut(track => track('dog', 'age'));
   const rootState = state(); // get anything from root state for preparation
-  setTimeout(() => {
-    put(draft => { draft.dogAge *= 2 }); // commit state changes whenever you want
-    put(select().dogAge * 10); // 20 fold increased
+  setTimeout(() => { // operation will be safe in async callback
+    put(dogAge => dogAge * 2);
+    put(select() * 10); // 20 fold increased
   }, 2000);
 })
 
@@ -137,11 +134,11 @@ const [cancelPromise, cancel] = (() => {
 myRegister('UPDATE_CANCEL', (action, { selectToPut }) => {
   const { step } = selectToPut();
   const mockApi = new Promise(res => setTimeout(res, 1000));
-  step(mockApi).then(() => { // do something });
+  step(mockApi).then(() => { // do something after 1000ms });
 })
 
 myDispatch({ type: 'UPDATE_CANCEL' }, cancelPromise, cancelCallback);
-setTimeout(cancel, 500); // cancelPromise would become fulfilled after 500ms
+setTimeout(cancel, 500); // cancel after 500ms
 
 ```
 
@@ -150,7 +147,7 @@ what will happen when cancelPromise become fulfilled? 👇\
 all of the pending step will stay at pending forever
 
 ```javascript
-// for example 500ms < 1000ms, so cancellation is earlier than mockApi
+// for example 500ms < 1000ms
 step(mockApi).then(() => { // will never be executed });
 ```
 
@@ -162,7 +159,7 @@ myRegister('UPDATE_DONE', (action, { selectToPut, done }) => {
   setTimeout(done, 3000); // whenever
 })
 myDispatch({ type: 'UPDATE_DONE' }).then(() => console.log('done'));
-
+// myDispatch will become fulfilled when all impacted rerender is ok
 ```
 
 ## Assemble sub conveyor
