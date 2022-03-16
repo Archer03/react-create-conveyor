@@ -48,7 +48,7 @@ const B = () => {
 }
 
 // return a map to collect mappings
-// only tracked props will be added to draft, which received in the producer passed to drawDog
+// only tracked props will be added to the draft object received in the producer
 // use state to get values from root state
 // use memo to cache calculation
 // use task to define any assignment method
@@ -58,8 +58,8 @@ const C = () => {
     map.set('cName', track('dog', 'name'));
     map.set('cBreed', track('dog', 'breed'));
     map.set('cAge', track('dog', 'age'));
-    // calculation is now dependent on dog.age
     map.set('fullName', state().dog.name + state().dog.breed);
+    // calculation is now dependent on dog.age
     map.set('memoName', memo(() => state().dog.name + state().dog.breed, [state().dog.age]));
     map.set('myDisaptch', task((draft, { type, payload }) => { // redux style
       if (type === 'RESET') {
@@ -83,12 +83,12 @@ const C = () => {
 }
 
 // v is actually equal to use a map, nothing special
-// if no prop tracked, root state will be passed to producer instead
 const D = () => {
-  const [{ dNum, upTen }, myUpdate] = useMyData(({ v, state, task }) => {
+  const [{ dNum, upTen }, myUpdate] = useMyData(({ v, state, task }) => { // track is not necessary
     v('dNum', state().count);
     v('dDogName', state().dog.name);
-    v('upTen', task((draft) => { draft.count += 10 })) // just do it (use count but not dNum)
+    v('upTen', task((draft) => { draft.count += 10 })) // use count but not dNum
+    // for no prop tracked, draft will be proxy of root state
   });
   return <div>
     <button onClick={upTen}>D upTen{dNum}</button>
@@ -112,9 +112,9 @@ export const [useMyData, { register: myRegister, dispatch: myDispatch }] = creat
 myRegister('UPDATE_DOG', (action, { selectToPut }) => {
   const { select, put, state } = selectToPut(track => track('dog', 'age'));
   const rootState = state(); // get anything from root state for preparation
-  setTimeout(() => { // operation will be safe in async callback
-    put(dogAge => dogAge * 2);
-    put(select() * 10); // 20 fold increased
+  setTimeout(() => {
+    put(select() * 10); // select() return the latest selected result, latest dog age here
+    put(dogAge => dogAge * 2); // 20 fold increased at last
   }, 2000);
 })
 

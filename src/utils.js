@@ -4,8 +4,8 @@ import { TRACK_AS_RET } from './core';
 /**
  * compare changes for selected
  */
-export const selectedChanged = (preSelected, execSelect) => {
-  const { selected, mapping } = execSelect();
+export const selectedChanged = (preSelected, selectInfo) => {
+  const { selected, mapping } = selectInfo;
   const singlePath = mapping.get(TRACK_AS_RET);
   if (singlePath) {
     return !Object.is(preSelected, selected);
@@ -19,8 +19,8 @@ export const selectedChanged = (preSelected, execSelect) => {
 /**
  * create new root state
  */
-export const getNewState = (curRoot, execSelect, work) => {
-  const { draft, mapping } = execSelect();
+export const getNewState = (curRoot, selectInfo, work) => {
+  const { draft, mapping } = selectInfo;
   const singlePath = mapping.get(TRACK_AS_RET);
   // only 3 case is allowed here: draft is root, track is ret, use mapping
   let newState = null;

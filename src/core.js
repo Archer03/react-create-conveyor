@@ -57,7 +57,7 @@ export const useConveyor = (selector, conveyor) => {
   const task = (reducer => {
     return (...params) => {
       const work = draft => reducer(draft, ...params);
-      const newState = getNewState(getRoot(), execSelect, work);
+      const newState = getNewState(getRoot(), execSelect(), work);
       checkShouldUpdate(newState);
     }
   })
@@ -88,7 +88,7 @@ export const useConveyor = (selector, conveyor) => {
     memoIndex.current = 0;
     let selected = {};
     let draft = {};
-    if (pathSet.has(selectorRet)) {
+    if (pathSet.has(selectorRet)) { // useMyData(({ track }) => track('count')); // tracked prop as selector ret
       const path = selectorRet;
       mapping.set(TRACK_AS_RET, path);
       selected = draft = path.reduce((p, v) => p[v], getRoot());
@@ -111,14 +111,19 @@ export const useConveyor = (selector, conveyor) => {
     }
     return { selected, draft, mapping };
   }
-  const { selected } = execSelect();
+
+  const selectInfo = execSelect();
+  const selectedRef = useRef(selectInfo.selected);
+  if (selectedChanged(selectedRef.current, selectInfo)) {
+    selectedRef.current = selectInfo.selected;
+  }
 
   const renderRef = useRef(null);
   renderRef.current && renderRef.current();
   renderRef.current = null;
   const [, forceUpdate] = useReducer(x => x + 1, 0);
   const doCheck = () => {
-    if (selector && !selectedChanged(selected, execSelect)) return Promise.resolve();
+    if (selector && !selectedChanged(selectedRef.current, execSelect())) return Promise.resolve();
     const ret = new Promise(res => renderRef.current = res);
     forceUpdate(); // first time forceUpdate render sync and takes more time
     return ret;
@@ -126,14 +131,14 @@ export const useConveyor = (selector, conveyor) => {
   useEffect(() => {
     updaters.add(doCheck);
     return () => updaters.delete(doCheck);
-  }, [selected, selector]); // 事实上selector每次都会变
+  }, [selectedRef.current]);
 
   return [
-    selected,
+    selectedRef.current,
     useCallback(work => {
-      const newState = getNewState(getRoot(), execSelect, work);
+      const newState = getNewState(getRoot(), execSelect(), work);
       checkShouldUpdate(newState);
-    }, [selector])
+    }, [selectedRef.current])
   ];
 }
 
@@ -197,7 +202,7 @@ export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
     return {
       select: () => execSelect().selected,
       put: work => {
-        const newState = getNewState(getRoot(), execSelect, work);
+        const newState = getNewState(getRoot(), execSelect(), work);
         putPromise = checkShouldUpdate(newState);
       },
       state: getRoot,
