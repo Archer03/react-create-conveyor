@@ -40,15 +40,13 @@ const A = () => {
   }>A{toDos}</button>
 }
 
-// pass value to setCount instead of producer function
-// but this is allowed only when selector return a tracked prop
+// pass a value instead of producer function to setCount
 const B = () => {
   const [count, setCount] = useMyData(({ track }) => track('count'));
   return <button onClick={() => setCount(count + 1)}>B{count}</button>
 }
 
 // return a map to collect mappings
-// only tracked props will be added to the draft object received in the producer
 // use state to get values from root state
 // use memo to cache calculation
 // use task to define any assignment method
@@ -59,11 +57,11 @@ const C = () => {
     map.set('cBreed', track('dog', 'breed'));
     map.set('cAge', track('dog', 'age'));
     map.set('fullName', state().dog.name + state().dog.breed);
-    // calculation is now dependent on dog.age
+    // memoName calculation is now dependent on dog.age
     map.set('memoName', memo(() => state().dog.name + state().dog.breed, [state().dog.age]));
     map.set('myDisaptch', task((draft, { type, payload }) => { // redux style
       if (type === 'RESET') {
-        draft.cAge = payload;
+        draft.cAge = payload; // only tracked props will be added to draft
         draft.cName = 'xiao bai';
         draft.cBreed = '🐶';
       }
@@ -84,11 +82,12 @@ const C = () => {
 
 // v is actually equal to use a map, nothing special
 const D = () => {
-  const [{ dNum, upTen }, myUpdate] = useMyData(({ v, state, task }) => { // track is not necessary
+  const [{ dNum, upTen }, myUpdate] = useMyData(({ v, state, task }) => {
     v('dNum', state().count);
     v('dDogName', state().dog.name);
     v('upTen', task((draft) => { draft.count += 10 })) // use count but not dNum
-    // for no prop tracked, draft will be proxy of root state
+    // track is not necessary
+    // for no prop tracked, draft passed to producer will be proxy of root state
   });
   return <div>
     <button onClick={upTen}>D upTen{dNum}</button>
