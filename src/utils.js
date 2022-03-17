@@ -11,8 +11,6 @@ export const selectedChanged = (preSelected, selectInfo) => {
     return !Object.is(preSelected, selected);
   }
   return Object.entries(preSelected)
-    // for task props as function, the state will always be latest, so ignore it
-    .filter(([, value]) => typeof value !== 'function') // @todo 函数可能依赖了闭包变量，所以不能忽略？
     .some(([key, value]) => !Object.is(value, selected[key]));
 }
 

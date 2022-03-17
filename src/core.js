@@ -6,6 +6,7 @@ const CHECK_UPDATE = Symbol();
 const ON_CHECK = Symbol();
 const UPDATERS = Symbol();
 const ASSIGN_MAP = Symbol();
+
 export const TRACK_AS_RET = Symbol();
 
 export const createInstance = (state, debugTarget) => {
@@ -54,17 +55,18 @@ export const useConveyor = (selector, conveyor) => {
     pathSet.add(path)
     return path;
   }
-  const task = (reducer => {
-    return (...params) => {
+  const task = (reducer, deps) => {
+    const taskFn = (...params) => {
       const work = draft => reducer(draft, ...params);
       const newState = getNewState(getRoot(), execSelect(), work);
       checkShouldUpdate(newState);
     }
-  })
+    return memo(taskFn, deps ? deps : []);
+  }
   const { current: oldMemoDeps } = useRef([]);
   const { current: oldMemoValues } = useRef([]);
   const memoIndex = useRef(0);
-  const memo = (computedFn, deps) => {
+  const memo = (computedFn, deps) => { // @todo 应返回对象，execSelect中根据key取old值而不是用数组顺序
     const index = memoIndex.current++;
     const oldDeps = oldMemoDeps[index];
     let changed = !oldDeps || oldDeps.some((old, i) => !Object.is(old, deps[i]));
@@ -112,7 +114,7 @@ export const useConveyor = (selector, conveyor) => {
     return { selected, draft, mapping };
   }
 
-  const selectInfo = execSelect();
+  const selectInfo = execSelect(); // every render needs execSelect, for selector may use external values
   const selectedRef = useRef(selectInfo.selected);
   if (selectedChanged(selectedRef.current, selectInfo)) {
     selectedRef.current = selectInfo.selected;
