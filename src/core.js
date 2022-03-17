@@ -13,7 +13,6 @@ export const createInstance = (state, debugTarget) => {
   const updaters = new Set();
   const assignmentMap = new Map();
   const onCheckUpdate = [];
-  let checkPromise, checkResolve;
   const checkShouldUpdate = next => {
     if (Object.is(state, next)) return Promise.resolve();
     hitSoy(state, next, debugTarget);
@@ -21,16 +20,8 @@ export const createInstance = (state, debugTarget) => {
     const cbPromise = new Promise(res => {
       Promise.all([onCheckUpdate.map(cb => Promise.resolve(cb()))]).then(res);
     });
-    if (checkPromise) return Promise.all([checkPromise, cbPromise]);
-    [checkPromise, checkResolve] = newPromise();
-    queueMicrotask(() => {
-      checkPromise = null;
-      Promise.all([...updaters].map(doCheck => doCheck())).then(() => {
-        checkResolve();
-        checkResolve = null;
-      });
-    })
-    return Promise.all([checkPromise, cbPromise]);
+    const doCheckPromise = Promise.all([...updaters].map(doCheck => doCheck()));
+    return Promise.all([doCheckPromise, cbPromise]);
   }
   const selfInstance = {
     [GET_STATE]: () => state,
@@ -121,14 +112,17 @@ export const useConveyor = (selector, conveyor) => {
   }
 
   const renderRef = useRef(null);
-  renderRef.current && renderRef.current();
+  renderRef.current?.resolve && renderRef.current.resolve();
   renderRef.current = null;
   const [, forceUpdate] = useReducer(x => x + 1, 0);
   const doCheck = () => {
+    // 这里的缓冲是可信任的，因为rerender execSelect到renderRef.current = null之间是同步执行
+    if (renderRef.current?.renderPromise) return renderRef.current.renderPromise;
     if (selector && !selectedChanged(selectedRef.current, execSelect())) return Promise.resolve();
-    const ret = new Promise(res => renderRef.current = res);
+    const [renderPromise, resolve] = newPromise();
+    renderRef.current = { renderPromise, resolve };
     forceUpdate(); // first time forceUpdate render sync and takes more time
-    return ret;
+    return renderPromise;
   }
   useEffect(() => {
     updaters.add(doCheck);
