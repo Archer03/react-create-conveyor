@@ -81,6 +81,21 @@ export const hitSoy = (preState, nextState, [debugProps, debugEntry]) => {
   if (changedProps.length) debugEntry(changedProps);
 }
 
+/**
+ * get memo value by comparing cache
+ */
+export const getMemoValue = (key, cacheMap, computedFn, deps) => {
+  !cacheMap.get(key) && cacheMap.set(key, {});
+  const cache = cacheMap.get(key);
+  const changed = !cache.oldDeps || cache.oldDeps.some((old, index) => !Object.is(old, deps[index]));
+  if (changed) {
+    cache.oldDeps = deps.slice();
+    return cache.oldValue = computedFn();
+  } else {
+    return cache.oldValue;
+  }
+}
+
 export const newPromise = () => {
   let resolve = null;
   let reject = null;

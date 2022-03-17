@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useCallback, useRef } from 'react';
-import { getNewState, hitSoy, isPlainObject, newPromise, selectedChanged } from './utils';
+import { getNewState, hitSoy, isPlainObject, getMemoValue, newPromise, selectedChanged } from './utils';
 
 const GET_STATE = Symbol();
 const CHECK_UPDATE = Symbol();
@@ -46,27 +46,19 @@ export const useConveyor = (selector, conveyor) => {
     pathSet.add(path)
     return path;
   }
-  const task = (reducer, deps) => {
+  const task = (memoSet, reducer, deps) => {
     const taskFn = (...params) => {
       const work = draft => reducer(draft, ...params);
       const newState = getNewState(getRoot(), execSelect(), work);
       checkShouldUpdate(newState);
     }
-    return memo(taskFn, deps ? deps : []);
+    return memo(memoSet, () => taskFn, deps ? deps : []);
   }
-  const { current: oldMemoDeps } = useRef([]);
-  const { current: oldMemoValues } = useRef([]);
-  const memoIndex = useRef(0);
-  const memo = (computedFn, deps) => { // @todo 应返回对象，execSelect中根据key取old值而不是用数组顺序
-    const index = memoIndex.current++;
-    const oldDeps = oldMemoDeps[index];
-    let changed = !oldDeps || oldDeps.some((old, i) => !Object.is(old, deps[i]));
-    if (changed) {
-      oldMemoDeps[index] = deps.slice();
-      return oldMemoValues[index] = computedFn();
-    } else {
-      return oldMemoValues[index];
-    }
+  const { current: memoCacheMap } = useRef(new Map());
+  const memo = (memoSet, computedFn, deps) => {
+    const memoInfo = { computedFn, deps };
+    memoSet.add(memoInfo);
+    return memoInfo;
   }
 
   const execSelect = () => {
@@ -76,11 +68,16 @@ export const useConveyor = (selector, conveyor) => {
       throw ('only state of plain object deserves a selector for mapping!');
     }
     const pathSet = new Set();
+    const memoSet = new Set();
     const v = (key, value) => mapping.set(key, value);
-    let selectorRet = selector({ v, track: track.bind(null, pathSet), task, memo, state: getRoot });
-    memoIndex.current = 0;
-    let selected = {};
-    let draft = {};
+    let selectorRet = selector({
+      v,
+      state: getRoot,
+      track: track.bind(null, pathSet),
+      memo: memo.bind(null, memoSet),
+      task: task.bind(null, memoSet)
+    });
+    let selected = {}, draft = {};
     if (pathSet.has(selectorRet)) { // useMyData(({ track }) => track('count')); // tracked prop as selector ret
       const path = selectorRet;
       mapping.set(TRACK_AS_RET, path);
@@ -94,6 +91,9 @@ export const useConveyor = (selector, conveyor) => {
       [...mapping.entries()].forEach(([key, value]) => {
         if (pathSet.has(value)) {
           selected[key] = draft[key] = value.reduce((p, v) => p[v], getRoot());
+        } else if (memoSet.has(value)) {
+          const { computedFn, deps } = value;
+          selected[key] = getMemoValue(key, memoCacheMap, computedFn, deps);
         } else {
           selected[key] = value;
         }
