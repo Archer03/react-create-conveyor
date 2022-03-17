@@ -60,7 +60,6 @@ export const useConveyor = (selector, conveyor) => {
     return memoInfo;
   }
 
-  const { current: memoCacheMap } = useRef(new Map());
   const execSelect = () => {
     let mapping = new Map();
     if (!selector) return { selected: getRoot(), draft: getRoot(), mapping };
@@ -103,6 +102,13 @@ export const useConveyor = (selector, conveyor) => {
       throw ('please at least map a prop or return a tracked prop for selector!');
     }
     return { selected, draft, mapping };
+  }
+
+  const conveyorRef = useRef(conveyor);
+  const { current: memoCacheMap } = useRef(new Map());
+  if (conveyorRef.current !== conveyor) {
+    conveyorRef.current = conveyor;
+    memoCacheMap.clear(); // useRef will be kept despite even js file rebuild in dev?
   }
 
   const selectInfo = execSelect(); // every render needs execSelect, for selector may use external values

@@ -10,7 +10,7 @@ export const selectedChanged = (preSelected, selectInfo) => {
   if (singlePath) {
     return !Object.is(preSelected, selected);
   }
-  return Object.entries(preSelected)
+  return Object.entries(preSelected) // @todo root state is primitive
     .some(([key, value]) => !Object.is(value, selected[key]));
 }
 
