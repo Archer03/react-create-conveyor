@@ -1,42 +1,41 @@
 import produce from 'immer';
-import { TRACK_AS_RET } from './core';
+import { TRACK_AS_RET, ROOT_AS_DRAFT } from './core';
 
 /**
  * compare changes for selected
  */
 export const selectedChanged = (preSelected, selectInfo) => {
   const { selected, mapping } = selectInfo;
-  const singlePath = mapping.get(TRACK_AS_RET);
-  if (singlePath) {
+  if (mapping.has(TRACK_AS_RET) || mapping.has(ROOT_AS_DRAFT)) {
     return !Object.is(preSelected, selected);
   }
-  return Object.entries(preSelected) // @todo root state is primitive
+  return Object.entries(preSelected)
     .some(([key, value]) => !Object.is(value, selected[key]));
 }
 
 /**
  * create new root state
  */
-export const getNewState = (curRoot, selectInfo, work) => {
+export const produceNewState = (curRoot, selectInfo, work) => {
   const { draft, mapping } = selectInfo;
-  const singlePath = mapping.get(TRACK_AS_RET);
+  const singleTrack = mapping.get(TRACK_AS_RET);
   // only 3 case is allowed here: draft is root, track is ret, use mapping
   let newState = null;
   if (typeof work === 'function') {
     const nextSlice = isPrimitive(draft) ? work(draft) : produce(draft, work);
-    if (curRoot === draft) {
+    if (mapping.has(ROOT_AS_DRAFT)) {
       newState = nextSlice;
-    } else if (singlePath) {
-      newState = produceRootByOnePath(curRoot, nextSlice, singlePath);
+    } else if (singleTrack) {
+      newState = produceRootByOnePath(curRoot, nextSlice, singleTrack);
     } else {
       newState = produceRootByMapping(curRoot, nextSlice, mapping);
     }
-  } else if (curRoot === draft) {
+  } else if (mapping.has(ROOT_AS_DRAFT)) {
     newState = work;
-  } else if (singlePath) {
-    newState = produceRootByOnePath(curRoot, work, singlePath);
+  } else if (singleTrack) {
+    newState = produceRootByOnePath(curRoot, work, singleTrack);
   } else {
-    throw ('to set value directly, do not make mapping for selector!');
+    throw ('to set value directly, do not create mapping for selector!');
   }
   return newState;
 }

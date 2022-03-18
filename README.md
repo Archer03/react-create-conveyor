@@ -46,13 +46,13 @@ const B = () => {
   return <button onClick={() => setCount(count + 1)}>B{count}</button>
 }
 
-// return a map to collect mappings
+// return ConveyorMap to collect mappings
 // use state to get values from root state
 // use memo to cache calculation
 // use task to define any assignment method
 const C = () => {
-  const [dog, drawDog] = useMyData(({ state, memo, task, track }) => {
-    const map = new Map();
+  const [dog, drawDog] = useMyData(({ ConveyorMap, track, state, memo, task }) => {
+    const map = new ConveyorMap();
     map.set('cName', track('dog', 'name'));
     map.set('cBreed', track('dog', 'breed'));
     map.set('cAge', track('dog', 'age'));
@@ -61,8 +61,8 @@ const C = () => {
     map.set('memoName', memo(() => state().dog.name + state().dog.breed, [state().dog.age]));
     map.set('myDisaptch', task((draft, { type, payload }) => { // redux style
       if (type === 'RESET') {
-        draft.cAge = payload; // only tracked props will be added to draft
-        draft.cName = 'xiao bai';
+        draft.cAge = payload; // only tracked props will be added to draft!
+        draft.cName = 'xiao bai'; // eg. fullName dose not exist in draft
         draft.cBreed = '🐶';
       }
     }));
@@ -80,7 +80,7 @@ const C = () => {
   </div>
 }
 
-// v is actually equal to use a map, nothing special
+// v is actually equal to use ConveyorMap, nothing special
 const D = () => {
   const [{ dNum, upTen }, myUpdate] = useMyData(({ v, state, task }) => {
     v('dNum', state().count);
@@ -101,7 +101,7 @@ const D = () => {
 ## Register Assignment & Async Task
 
 ```javascript
-export const [useMyData, { register: myRegister, dispatch: myDispatch }] = createConveyor({
+export const [useMyDog, { register: myRegister, dispatch: myDispatch }] = createConveyor({
   dog: {
     age: 2
   }
@@ -118,9 +118,10 @@ myRegister('UPDATE_DOG', (action, { selectToPut }) => {
 })
 
 const E = () => {
+  const [dogAge] = useMyDog(({ state }) => state().dog.age);
   return <button onClick={() =>
     myDispatch({ type: 'UPDATE_DOG' })
-  }>E async 2s</button>
+  }>E async 2s {dogAge}</button>
 }
 ```
 
