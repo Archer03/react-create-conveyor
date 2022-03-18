@@ -102,26 +102,44 @@ const D = () => {
 
 ```javascript
 export const [useMyDog, { register: myRegister, dispatch: myDispatch }] = createConveyor({
+  owner: 'master',
   dog: {
+    name: '加布兽(Gabumon)',
+    breed: '🐶',
     age: 2
   }
 })
 
 // register an assignment for current conveyor
-myRegister('UPDATE_DOG', (action, { selectToPut }) => {
-  const { select, put, state } = selectToPut(track => track('dog', 'age'));
-  const rootState = state(); // get anything from root state for preparation
+myRegister('ULTIMATE_EVOLUTION', (action, { selectToPut, state, done }) => {
+  const { put: grow } = selectToPut(track => track('dog', 'age'));
+  const { select: getDog, put: evolve } = selectToPut(track => ({
+    name: track('dog', 'name'),
+    breed: track('dog', 'breed')
+  }));
+  const rootState = state(); // get anything from root state
+  console.log(`${rootState.owner}:${getDog().name}究极进化`);
   setTimeout(() => {
-    put(select() * 10); // select() return the latest selected result, latest dog age here
-    put(dogAge => dogAge * 2); // 20 fold increased at last
+    grow(age => age * 10);
+    evolve(draft => {
+      draft.name = '钢铁加鲁鲁(Metal Garurumon)';
+      draft.breed = '🐺';
+    });
+    console.log(`${getDog().name}`);
+    done('绝对冷冻气(Cocytus Breath)'); // resolve the promise return from dispatch
   }, 2000);
 })
 
 const E = () => {
-  const [dogAge] = useMyDog(({ state }) => state().dog.age);
+  const [age] = useMyDog(({ state }) => state().dog.age);
+  const [{ name, breed }] = useMyDog(({ state }) => ({
+    name: state().dog.name,
+    breed: state().dog.breed
+  }));
   return <button onClick={() =>
-    myDispatch({ type: 'UPDATE_DOG' })
-  }>E async 2s {dogAge}</button>
+    myDispatch({ type: 'ULTIMATE_EVOLUTION' }).then(ability => console.log(ability))
+    // ability will be printed after all impacted rerender is ok
+  }>E async 2s {age} {name} {breed}</button>
 }
 ```
 
@@ -153,17 +171,6 @@ all of the pending step will stay at pending forever
 ```javascript
 // for example 500ms < 1000ms
 step(mockApi).then(() => { // will never be executed });
-```
-
-### Resolved
-
-```javascript
-myRegister('UPDATE_DONE', (action, { selectToPut, done }) => {
-  // developer need to determine when to execute done
-  setTimeout(done, 3000); // whenever
-})
-myDispatch({ type: 'UPDATE_DONE' }).then(() => console.log('done'));
-// myDispatch will become fulfilled when all impacted rerender is ok
 ```
 
 ## Assemble sub conveyor

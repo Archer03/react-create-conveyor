@@ -10,7 +10,7 @@ const ASSIGN_MAP = Symbol();
 export const TRACK_AS_RET = Symbol();
 export const ROOT_AS_DRAFT = Symbol();
 
-class ConveyorMap extends Map {};
+class ConveyorMap extends Map { };
 
 export const createInstance = (state, debugTarget) => {
   const updaters = new Set();
@@ -221,7 +221,6 @@ export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
         const newState = produceNewState(getRoot(), execSelect(), work);
         putPromise = checkShouldUpdate(newState);
       },
-      state: getRoot,
       step: promise => new Promise((resolve, reject) => {
         promise.then(res => {
           if (cancelled) return;
@@ -232,11 +231,11 @@ export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
   }
 
   const [dispatchPromise, dispatchResolve, dispatchReject] = newPromise();
-  const done = () => {
+  const done = res => {
     // putPromise is the latest prommise which created from put
-    putPromise.then(dispatchResolve);
+    putPromise.then(() => dispatchResolve(res));
   }
-  assignment(action, { selectToPut, done, fail: dispatchReject });
+  assignment(action, { selectToPut, state: getRoot, done, fail: dispatchReject });
   return dispatchPromise;
 }
 
