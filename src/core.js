@@ -7,6 +7,7 @@ const ON_CHECK = Symbol();
 const UPDATERS = Symbol();
 const ASSIGN_MAP = Symbol();
 
+export const SELECT_AS_RET = Symbol();
 export const TRACK_AS_RET = Symbol();
 export const ROOT_AS_DRAFT = Symbol();
 
@@ -44,10 +45,22 @@ export const createInstance = (state, debugTarget) => {
  */
 export const useConveyor = (selector, conveyor) => {
   const { [GET_STATE]: getRoot, [CHECK_UPDATE]: checkShouldUpdate, [UPDATERS]: updaters } = conveyor;
+  const select = (selectSet, remapped) => {
+    if (!isPlainObject(remapped) || Object.keys(remapped).length === 0) {
+      throw ('please pass a plain object and at least select a prop for selector!')
+    }
+    selectSet.add(remapped);
+    return remapped;
+  }
   const track = (trackSet, ...path) => {
     if (path.length === 0) throw ('path needed!');
     trackSet.add(path)
     return path;
+  }
+  const memo = (memoSet, computeFn, deps) => {
+    const memoInfo = { computeFn, deps };
+    memoSet.add(memoInfo);
+    return memoInfo;
   }
   const task = (memoSet, reducer, deps) => {
     const taskFn = (...params) => {
@@ -57,60 +70,54 @@ export const useConveyor = (selector, conveyor) => {
     }
     return memo(memoSet, () => taskFn, deps ? deps : []);
   }
-  const memo = (memoSet, computedFn, deps) => {
-    const memoInfo = { computedFn, deps };
-    memoSet.add(memoInfo);
-    return memoInfo;
-  }
 
   const execSelect = () => {
     let mapping = new Map();
     if (!selector) {
-      mapping.set(ROOT_AS_DRAFT, getRoot());
+      mapping.set(ROOT_AS_DRAFT, null);
       return { selected: getRoot(), draft: getRoot(), mapping };
-    }
-    if (!isPlainObject(getRoot())) {
+    } else if (!isPlainObject(getRoot())) {
       throw ('only state of plain object deserves a selector for mapping!');
     }
+    const selectSet = new Set();
     const trackSet = new Set();
     const memoSet = new Set();
     const v = (key, value) => mapping.set(key, value);
     let selectorRet = selector({
       v,
-      ConveyorMap,
       state: getRoot,
+      select: select.bind(null, selectSet),
       track: track.bind(null, trackSet),
       memo: memo.bind(null, memoSet),
       task: task.bind(null, memoSet)
     });
-    let selected = {}, draft = {};
-    if (selectorRet instanceof ConveyorMap) {
-      mapping = selectorRet;
-      if (mapping.size === 0) throw ('please at least map a prop for selected!');
-    } else if (trackSet.has(selectorRet)) { // useMyData(({ track }) => track('count')); // tracked prop as selector ret
+    if (trackSet.has(selectorRet)) { // useMyData(({ track }) => track('count')); // tracked prop as selector ret
       const path = selectorRet;
       mapping.set(TRACK_AS_RET, path);
-      selected = draft = path.reduce((p, v) => p[v], getRoot());
-      return { selected, draft, mapping };
-    } else if (mapping.size === 0) {
-      mapping.set(ROOT_AS_DRAFT, selectorRet);
-      selected = selectorRet;
-      draft = getRoot();
-      return { selected, draft, mapping };
+      const selected = path.reduce((p, v) => p[v], getRoot());
+      return { selected, draft: selected, mapping };
+    } else if (!selectSet.has(selectorRet)) {
+      if (trackSet.size > 0 || memoSet.size > 0) {
+        throw ('track, memo, task could only work with select, check whether select is used!');
+      }
+      mapping.set(ROOT_AS_DRAFT, null);
+      return { selected: selectorRet, draft: getRoot(), mapping };
     }
-    [...mapping.entries()].forEach(([key, value]) => {
+    mapping.set(SELECT_AS_RET, selectorRet);
+    let selected = {}, draft = {};
+    Object.entries(selectorRet).forEach(([key, value]) => {
       if (trackSet.has(value)) {
         selected[key] = draft[key] = value.reduce((p, v) => p[v], getRoot());
       } else if (memoSet.has(value)) {
-        const { computedFn, deps } = value;
-        selected[key] = getMemoValue(key, memoCacheMap, computedFn, deps);
+        const { computeFn, deps } = value;
+        selected[key] = getMemoValue(key, memoCacheMap, computeFn, deps);
       } else {
         selected[key] = value;
       }
     });
     if (trackSet.size === 0) {
       draft = getRoot();
-      mapping.set(ROOT_AS_DRAFT);
+      mapping.set(ROOT_AS_DRAFT, null);
     }
     return { selected, draft, mapping };
   }
@@ -188,7 +195,7 @@ export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
     const execSelect = () => {
       const mapping = new Map();
       if (!selector) {
-        mapping.set(ROOT_AS_DRAFT, getRoot());
+        mapping.set(ROOT_AS_DRAFT, null);
         return { selected: getRoot(), draft: getRoot(), mapping }
       };
       if (!isPlainObject(getRoot())) {
@@ -201,9 +208,10 @@ export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
         const path = selectorRet;
         mapping.set(TRACK_AS_RET, path);
         selected = path.reduce((p, v) => p[v], getRoot());
-      } else if (!isPlainObject(selectorRet)) {
-        throw ('please return a plain object or tracked prop for selector!');
+      } else if (!isPlainObject(selectorRet) || Object.keys(selectorRet).length === 0) {
+        throw ('please at least track a prop for selector!');
       } else {
+        mapping.set(SELECT_AS_RET, selectorRet);
         Object.entries(selectorRet).forEach(([key, value]) => {
           if (trackSet.has(value)) {
             selected[key] = value.reduce((p, v) => p[v], getRoot());

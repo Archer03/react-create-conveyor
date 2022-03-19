@@ -1,6 +1,6 @@
 {
   "name": "react-create-conveyor",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "a state management for share, unite and debug react data easily",
   "main": "src/index.js",
   "scripts": {

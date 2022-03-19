@@ -46,28 +46,26 @@ const B = () => {
   return <button onClick={() => setCount(count + 1)}>B{count}</button>
 }
 
-// return ConveyorMap to collect mappings
+// use select to collect mappings
 // use state to get values from root state
 // use memo to cache calculation
 // use task to define any assignment method
 const C = () => {
-  const [dog, drawDog] = useMyData(({ ConveyorMap, track, state, memo, task }) => {
-    const map = new ConveyorMap();
-    map.set('cName', track('dog', 'name'));
-    map.set('cBreed', track('dog', 'breed'));
-    map.set('cAge', track('dog', 'age'));
-    map.set('fullName', state().dog.name + state().dog.breed);
+  const [dog, drawDog] = useMyData(({ select, track, state, memo, task }) => select({
+    cName: track('dog', 'name'),
+    cBreed: track('dog', 'breed'),
+    cAge: track('dog', 'age'),
+    fullName: state().dog.name + state().dog.breed,
     // memoName calculation is now dependent on dog.age
-    map.set('memoName', memo(() => state().dog.name + state().dog.breed, [state().dog.age]));
-    map.set('myDisaptch', task((draft, { type, payload }) => { // redux style
+    memoName: memo(() => state().dog.name + state().dog.breed, [state().dog.age]),
+    myDisaptch: task((draft, { type, payload }) => { // redux style
       if (type === 'RESET') {
         draft.cAge = payload; // only tracked props will be added to draft!
         draft.cName = 'xiao bai'; // eg. fullName dose not exist in draft
         draft.cBreed = '🐶';
       }
-    }));
-    return map;
-  });
+    })
+  }));
   return <div>
     <button onClick={() => drawDog(draft => {
       draft.cName = 'da huang'; // just draw it in producer
@@ -80,15 +78,13 @@ const C = () => {
   </div>
 }
 
-// v is actually equal to use ConveyorMap, nothing special
+// track is not necessary
 const D = () => {
-  const [{ dNum, upTen }, myUpdate] = useMyData(({ v, state, task }) => {
-    v('dNum', state().count);
-    v('dDogName', state().dog.name);
-    v('upTen', task((draft) => { draft.count += 10 })) // use count but not dNum
-    // track is not necessary
+  const [{ dNum, upTen }, myUpdate] = useMyData(({ select, state, task }) => select({
+    dNum: state().count,
     // for no prop tracked, draft passed to producer will be proxy of root state
-  });
+    upTen: task(draft => { draft.count += 10 }) // use count but not dNum
+  }));
   return <div>
     <button onClick={upTen}>D upTen{dNum}</button>
     <button onClick={() => myUpdate(draft => { draft.dog.age++ })}>

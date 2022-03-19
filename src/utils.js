@@ -1,5 +1,5 @@
 import produce from 'immer';
-import { TRACK_AS_RET, ROOT_AS_DRAFT } from './core';
+import { TRACK_AS_RET, ROOT_AS_DRAFT, SELECT_AS_RET } from './core';
 
 /**
  * compare changes for selected
@@ -19,7 +19,7 @@ export const selectedChanged = (preSelected, selectInfo) => {
 export const produceNewState = (curRoot, selectInfo, work) => {
   const { draft, mapping } = selectInfo;
   const singleTrack = mapping.get(TRACK_AS_RET);
-  // only 3 case is allowed here: draft is root, track is ret, use mapping
+  // only 3 case is allowed here: root as draft, track as ret, select as ret
   let newState = null;
   if (typeof work === 'function') {
     const nextSlice = isPrimitive(draft) ? work(draft) : produce(draft, work);
@@ -46,7 +46,7 @@ export const produceNewState = (curRoot, selectInfo, work) => {
 export const produceRootByMapping = (curRoot, nextSlice, mapping) => {
   return produce(curRoot, draft => {
     Object.entries(nextSlice).forEach(([key, value]) => {
-      const paths = mapping.get(key).slice();
+      const paths = mapping.get(SELECT_AS_RET)[key].slice();
       const lastKey = paths.pop();
       paths.reduce((p, v) => p[v], draft)[lastKey] = value;
     });
@@ -83,13 +83,13 @@ export const hitSoy = (preState, nextState, [debugProps, debugEntry]) => {
 /**
  * get memo value by comparing cache
  */
-export const getMemoValue = (key, cacheMap, computedFn, deps) => {
+export const getMemoValue = (key, cacheMap, computeFn, deps) => {
   !cacheMap.get(key) && cacheMap.set(key, {});
   const cache = cacheMap.get(key);
   const changed = !cache.oldDeps || cache.oldDeps.some((old, index) => !Object.is(old, deps[index]));
   if (changed) {
     cache.oldDeps = deps.slice();
-    return cache.oldValue = computedFn();
+    return cache.oldValue = computeFn();
   } else {
     return cache.oldValue;
   }
