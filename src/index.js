@@ -5,8 +5,8 @@ export default (state, ...debugTarget) => {
   const selfInstance = createInstance(state, debugTarget);
   // [hook, { register, dispatch, assemble }]
   return [
-    selector => {
-      return useConveyor(selector, selfInstance);
+    (selector, externalDeps) => {
+      return useConveyor(selfInstance, selector, externalDeps);
     },
     selfInstance
   ]

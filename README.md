@@ -179,8 +179,8 @@ const [, subInstance] = createConveyor(666); // two weeks later created a sub co
 globalAssemble('assembledNumber', subInstance); // just assemble it, it's ok
 
 const F = () => {
-  const [fNum] = useGlobal(({ track }) => track('assembledNumber'));
-  return <>F{fNum}</> // F666, get it in global conveyor
+  const [fNum, setCount] = useGlobal(({ track }) => track('assembledNumber'));
+  return <button onClick={() => setCount(fNum + 1)}>F{fNum}</button> // F666, get it in global conveyor
 }
 ```
 

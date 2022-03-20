@@ -11,7 +11,7 @@ export const SELECT_AS_RET = Symbol();
 export const TRACK_AS_RET = Symbol();
 export const ROOT_AS_DRAFT = Symbol();
 
-class ConveyorMap extends Map { };
+export const CUR_SELECTED = Symbol();
 
 export const createInstance = (state, debugTarget) => {
   const updaters = new Set();
@@ -22,7 +22,7 @@ export const createInstance = (state, debugTarget) => {
     hitSoy(state, next, debugTarget);
     state = next;
     const cbPromise = new Promise(res => {
-      Promise.all([onCheckUpdate.map(cb => Promise.resolve(cb()))]).then(res);
+      Promise.all([onCheckUpdate.map(cb => Promise.resolve(cb(state)))]).then(res);
     });
     const doCheckPromise = Promise.all([...updaters].map(doCheck => doCheck()));
     return Promise.all([doCheckPromise, cbPromise]);
@@ -43,7 +43,7 @@ export const createInstance = (state, debugTarget) => {
 /**
  * useConveyor hook
  */
-export const useConveyor = (selector, conveyor) => {
+export const useConveyor = (conveyor, selector, externalDeps) => {
   const { [GET_STATE]: getRoot, [CHECK_UPDATE]: checkShouldUpdate, [UPDATERS]: updaters } = conveyor;
   const select = (selectSet, remapped) => {
     if (!isPlainObject(remapped) || Object.keys(remapped).length === 0) {
@@ -129,24 +129,29 @@ export const useConveyor = (selector, conveyor) => {
     memoCacheMap.clear(); // useRef will be kept despite even js file rebuild in dev?
   }
 
-  const selectInfo = execSelect(); // every render needs execSelect, for selector may use external values
+  const doCheckRef = useRef(null);
+  let selectInfo = null;
+  if (doCheckRef.current?.doCheckResolve) {
+    selectInfo = execSelect();
+    doCheckRef.current.doCheckResolve();
+    doCheckRef.current = null;
+  } else {
+    selectInfo = externalDeps ? getMemoValue(CUR_SELECTED, memoCacheMap, execSelect, externalDeps) : execSelect();
+  }
   const selectedRef = useRef(selectInfo.selected);
   if (selectedChanged(selectedRef.current, selectInfo)) {
     selectedRef.current = selectInfo.selected;
   }
 
-  const renderRef = useRef(null);
-  renderRef.current?.resolve && renderRef.current.resolve();
-  renderRef.current = null;
   const [, forceUpdate] = useReducer(x => x + 1, 0);
   const doCheck = () => {
-    // 这里的缓冲是可信任的，因为rerender execSelect到renderRef.current = null之间是同步执行
-    if (renderRef.current?.renderPromise) return renderRef.current.renderPromise;
-    if (selector && !selectedChanged(selectedRef.current, execSelect())) return Promise.resolve();
-    const [renderPromise, resolve] = newPromise();
-    renderRef.current = { renderPromise, resolve };
+    // 这里的缓冲是可信任的，因为rerender execSelect到doCheckRef.current = null之间是同步执行
+    if (doCheckRef.current?.doCheckPromise) return doCheckRef.current.doCheckPromise;
+    if (selector && !selectedChanged(selectedRef.current, execSelect(true))) return Promise.resolve();
+    const [doCheckPromise, doCheckResolve] = newPromise();
+    doCheckRef.current = { doCheckPromise, doCheckResolve };
     forceUpdate(); // first time forceUpdate render sync and takes more time
-    return renderPromise;
+    return doCheckPromise;
   }
   useEffect(() => {
     updaters.add(doCheck);

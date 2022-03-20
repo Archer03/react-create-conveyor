@@ -86,7 +86,9 @@ export const hitSoy = (preState, nextState, [debugProps, debugEntry]) => {
 export const getMemoValue = (key, cacheMap, computeFn, deps) => {
   !cacheMap.get(key) && cacheMap.set(key, {});
   const cache = cacheMap.get(key);
-  const changed = !cache.oldDeps || cache.oldDeps.some((old, index) => !Object.is(old, deps[index]));
+  const changed = !cache.oldDeps || 
+    cache.oldDeps.length !== deps.length ||
+    cache.oldDeps.some((old, index) => !Object.is(old, deps[index]));
   if (changed) {
     cache.oldDeps = deps.slice();
     return cache.oldValue = computeFn();
