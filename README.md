@@ -82,7 +82,7 @@ const C = () => {
 const D = () => {
   const [{ dNum, upTen }, myUpdate] = useMyData(({ select, state, task }) => select({
     dNum: state().count,
-    // for no prop tracked, draft passed to producer will be proxy of root state
+    // for no prop tracked, draft will be proxy of root state
     upTen: task(draft => { draft.count += 10 }) // use count but not dNum
   }));
   return <div>
@@ -114,7 +114,7 @@ myRegister('ULTIMATE_EVOLUTION', (action, { selectToPut, state, done }) => {
     breed: track('dog', 'breed')
   }));
   const rootState = state(); // get anything from root state
-  console.log(`${rootState.owner}:${getDog().name}究极进化`);
+  console.log(`${rootState.owner}: ${getDog().name} ultimate evolution.`);
   setTimeout(() => {
     grow(age => age * 10);
     evolve(draft => {
@@ -198,5 +198,5 @@ createConveyor({ dog: { age: 2 } }, [['dog', 'age']], changed => {
 })
 ```
 
-other nice solutions: jotai, zustand, recoil\
+other nice solutions: mobx, jotai, zustand, recoil\
 which are designed to be more comprehensive 🦸
