@@ -189,11 +189,11 @@ const F = () => {
 Let's see something useful
 
 ```javascript
-// provide path of prop for the second param
-// multiple props is allowed, as it is a 2D array
+const [, { autorun }] = createConveyor({ dog: { age: 2 } });
+// provide the prop path (multiple props is allowed, as it is a 2D array)
 // just debug happily
-// and with breaking point, to find out where changes happened exactly in function call stack
-createConveyor({ dog: { age: 2 } }, [['dog', 'age']], changed => {
+// and with breaking point, to find out where changes happened clearly in function call stack
+autorun([['dog', 'age']], changed => {
   console.log(changed); // consle log: [{"pre":2,"next":3}]
 })
 ```

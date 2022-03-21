@@ -17,13 +17,12 @@ export const createInstance = (state, debugTarget) => {
   const updaters = new Set();
   const assignmentMap = new Map();
   const onCheckUpdate = [];
+  const autorunQuene = [];
   const checkShouldUpdate = next => {
     if (Object.is(state, next)) return Promise.resolve();
-    hitSoy(state, next, debugTarget);
+    autorunQuene.forEach(debugInfo => hitSoy(state, next, debugInfo));
     state = next;
-    const cbPromise = new Promise(res => {
-      Promise.all([onCheckUpdate.map(cb => Promise.resolve(cb(state)))]).then(res);
-    });
+    const cbPromise = Promise.all([onCheckUpdate.map(cb => Promise.resolve(cb(state)))]);
     const doCheckPromise = Promise.all([...updaters].map(doCheck => doCheck()));
     return Promise.all([doCheckPromise, cbPromise]);
   }
@@ -37,6 +36,7 @@ export const createInstance = (state, debugTarget) => {
   selfInstance.register = register.bind(null, selfInstance);
   selfInstance.dispatch = dispatch.bind(null, selfInstance);
   selfInstance.assemble = assemble.bind(null, selfInstance);
+  selfInstance.autorun = (...debugInfo) => autorunQuene.push(debugInfo);
   return selfInstance;
 }
 
@@ -82,9 +82,7 @@ export const useConveyor = (conveyor, selector, externalDeps) => {
     const selectSet = new Set();
     const trackSet = new Set();
     const memoSet = new Set();
-    const v = (key, value) => mapping.set(key, value);
     let selectorRet = selector({
-      v,
       state: getRoot,
       select: select.bind(null, selectSet),
       track: track.bind(null, trackSet),

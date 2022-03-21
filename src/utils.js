@@ -68,7 +68,9 @@ export const produceByOnePath = (toModify, next, path) => {
  * if the tracked props changed, debugEntry function will be executed
  */
 export const hitSoy = (preState, nextState, [debugProps, debugEntry]) => {
-  if (!debugProps) return;
+  if (!debugProps?.length) {
+    debugProps = [[]];
+  }
   const changedProps = debugProps.reduce((collected, propPaths) => {
     const pre = propPaths.reduce((p, v) => p[v], preState);
     const next = propPaths.reduce((p, v) => p[v], nextState);

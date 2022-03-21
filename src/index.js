@@ -1,9 +1,9 @@
 import { createInstance, useConveyor } from "./core";
 
 // createConveyor
-export default (state, ...debugTarget) => {
-  const selfInstance = createInstance(state, debugTarget);
-  // [hook, { register, dispatch, assemble }]
+export const createConveyor = state => {
+  const selfInstance = createInstance(state);
+  // [hook, { register, dispatch, assemble, autorun }]
   return [
     (selector, externalDeps) => {
       return useConveyor(selfInstance, selector, externalDeps);
