@@ -26,14 +26,14 @@ export const produceNewState = (curRoot, selectInfo, work) => {
     if (mapping.has(ROOT_AS_DRAFT)) {
       newState = nextSlice;
     } else if (singleTrack) {
-      newState = produceRootByOnePath(curRoot, nextSlice, singleTrack);
+      newState = produceByOnePath(curRoot, nextSlice, singleTrack);
     } else {
-      newState = produceRootByMapping(curRoot, nextSlice, mapping);
+      newState = produceByMapping(curRoot, nextSlice, mapping.get(SELECT_AS_RET));
     }
   } else if (mapping.has(ROOT_AS_DRAFT)) {
     newState = work;
   } else if (singleTrack) {
-    newState = produceRootByOnePath(curRoot, work, singleTrack);
+    newState = produceByOnePath(curRoot, work, singleTrack);
   } else {
     throw ('to set value directly, do not create mapping for selector!');
   }
@@ -41,12 +41,12 @@ export const produceNewState = (curRoot, selectInfo, work) => {
 }
 
 /**
- * update changes to root state by map
+ * update changes by selected mappings
  */
-export const produceRootByMapping = (curRoot, nextSlice, mapping) => {
-  return produce(curRoot, draft => {
+export const produceByMapping = (toModify, nextSlice, selectedObj) => {
+  return produce(toModify, draft => {
     Object.entries(nextSlice).forEach(([key, value]) => {
-      const paths = mapping.get(SELECT_AS_RET)[key].slice();
+      const paths = selectedObj[key].slice();
       const lastKey = paths.pop();
       paths.reduce((p, v) => p[v], draft)[lastKey] = value;
     });
@@ -54,10 +54,10 @@ export const produceRootByMapping = (curRoot, nextSlice, mapping) => {
 }
 
 /**
- * modify a prop value for root state
+ * modify a single prop value
  */
-export const produceRootByOnePath = (curRoot, next, path) => {
-  return produce(curRoot, draft => {
+export const produceByOnePath = (toModify, next, path) => {
+  return produce(toModify, draft => {
     const keys = path.slice();
     const lastKey = keys.pop();
     keys.reduce((p, v) => p[v], draft)[lastKey] = next;
