@@ -33,6 +33,7 @@ export const createInstance = (state, debugTarget) => {
     [UPDATERS]: updaters,
     [ASSIGN_MAP]: assignmentMap,
   };
+  selfInstance.childUpdateCalled = 0;
   selfInstance.register = register.bind(null, selfInstance);
   selfInstance.dispatch = dispatch.bind(null, selfInstance);
   selfInstance.assemble = assemble.bind(null, selfInstance);
@@ -271,10 +272,15 @@ export const assemble = (parentConveyor, alias, childConveyor) => {
   }
   parentState[alias] = getChildState();
   onChildCheck.push(childNode => {
+    if (parentConveyor.childUpdateCalled > 0) {
+      parentConveyor.childUpdateCalled--;
+      return Promise.resolve();
+    }
     return parentCheckShouldUpdate({ ...parentState, [alias]: childNode });
   });
   onParentCheck.push(parentNode => {
     if (!Object.is(getChildState(), parentNode[alias])) {
+      parentConveyor.childUpdateCalled++;
       return childCheckShouldUpdate(parentNode[alias]);
     }
     return Promise.resolve();
