@@ -22,7 +22,7 @@ export const produceNewState = (curRoot, selectInfo, work) => {
   // only 3 case is allowed here: root as draft, track as ret, select as ret
   let newState = null;
   if (typeof work === 'function') {
-    const nextSlice = isPrimitive(draft) ? work(draft) : produce(draft, work);
+    const nextSlice = produce(draft, work);
     if (mapping.has(ROOT_AS_DRAFT)) {
       newState = nextSlice;
     } else if (singleTrack) {
@@ -115,17 +115,4 @@ export const isPlainObject = obj => {
     proto = Object.getPrototypeOf(proto);
   }
   return Object.getPrototypeOf(obj) === proto;
-  // why not let proto = Object.getPrototypeOf(obj)
-  // return !!proto && Object.getPrototypOf(proto) === null
-  // for while is more in line with machine?
-}
-
-export const isPrimitive = obj => {
-  return typeof obj === "boolean" ||
-    typeof obj === "number" ||
-    typeof obj === "string" ||
-    typeof obj === "symbol" ||
-    typeof obj === "bigint" ||
-    typeof obj === "undefined" ||
-    obj === null;
 }

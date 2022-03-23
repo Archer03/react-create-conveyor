@@ -142,26 +142,21 @@ const E = () => {
 ### Cancellation
 
 ```javascript
-// cancelPromise and calcel
-const [cancelPromise, cancel] = (() => {
-  let cancel = null;
-  return [new Promise(res => cancel = res), cancel];
-})();
-
 // use step to call api, and this is useful for cancellation
 myRegister('UPDATE_CANCEL', (action, { selectToPut }) => {
   const { step } = selectToPut();
   const mockApi = new Promise(res => setTimeout(res, 1000));
-  step(mockApi).then(() => { // do something after 1000ms });
+  step(mockApi).then(() => console.log('mock api done.')); // do something after 1000ms
 })
 
-myDispatch({ type: 'UPDATE_CANCEL' }, cancelPromise, cancelCallback);
-setTimeout(cancel, 500); // cancel after 500ms
-
+const abortCtrl = new AbortController();
+myDispatch({ type: 'UPDATE_CANCEL' }, abortCtrl.signal).catch(err => {
+  if (err?.name === 'AbortError') console.log(err.message);
+})
+setTimeout(() => abortCtrl.abort('cancel assignment'), 500); // cancel after 500ms
 ```
 
-to some degree, cancelPromise is like AbortController to fetch\
-what will happen when cancelPromise become fulfilled? 👇\
+what will happen after abortCtrl.abort() is called? 👇\
 all of the pending step will stay at pending forever
 
 ```javascript

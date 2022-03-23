@@ -178,17 +178,28 @@ export const register = (conveyor, type, assignment) => {
 /**
  * dispatch an assignment to do
  */
-export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
+export const dispatch = (conveyor, action, abortSignal) => {
   const { [GET_STATE]: getRoot,
     [CHECK_UPDATE]: checkShouldUpdate,
     [ASSIGN_MAP]: assignmentMap } = conveyor;
   const assignment = assignmentMap.get(action.type);
   if (!assignment) throw ('no type registered!');
-  let cancelled = false;
-  cancelSignal && cancelSignal.then(() => {
-    cancelled = true;
-    cancelCallback && cancelCallback();
-  });
+  if (abortSignal) {
+    const rejectReasonOut = () => {
+      const err = new Error(abortSignal.reason);
+      err.name = 'AbortError';
+      dispatchReject(err);
+    }
+    if (abortSignal.aborted) {
+      rejectReasonOut();
+    } else {
+      abortSignal.addEventListener('abort', function onAbort() {
+        rejectReasonOut();
+        abortSignal.removeEventListener('abort', onAbort);
+      });
+    }
+  }
+
   const track = (trackSet, ...path) => {
     if (path.length === 0) throw ('path needed!');
     trackSet.add(path)
@@ -233,11 +244,9 @@ export const dispatch = (conveyor, action, cancelSignal, cancelCallback) => {
         const newState = produceNewState(getRoot(), execSelect(), work);
         putPromise = checkShouldUpdate(newState);
       },
-      step: promise => new Promise((resolve, reject) => {
-        promise.then(res => {
-          if (cancelled) return;
-          resolve(res);
-        }).catch(err => reject(err));
+      step: promise => promise.then(res => {
+        if (abortSignal?.aborted) return new Promise(() => { });
+        return res;
       })
     }
   }
