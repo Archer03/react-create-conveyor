@@ -190,54 +190,52 @@ export const dispatch = (conveyor, action, abortSignal) => {
     trackSet.add(path)
     return path;
   }
-  let putPromise = null;
-  const selectToPut = selector => {
-    const execSelect = () => {
-      const mapping = new Map();
-      if (!selector) {
-        mapping.set(ROOT_AS_DRAFT, null);
-        return { selected: getRoot(), draft: getRoot(), mapping }
-      };
-      if (!isPlainObject(getRoot())) {
-        throw ('only state of plain object deserves a selector for mapping!');
-      }
-      const trackSet = new Set();
-      const selectorRet = selector(track.bind(null, trackSet));
-      let selected = {};
-      if (trackSet.has(selectorRet)) {
-        const path = selectorRet;
-        mapping.set(TRACK_AS_RET, path);
-        selected = path.reduce((p, v) => p[v], getRoot());
-      } else if (!isPlainObject(selectorRet) || Object.keys(selectorRet).length === 0) {
-        throw ('please at least track a prop for selector!');
-      } else {
-        mapping.set(SELECT_AS_RET, selectorRet);
-        Object.entries(selectorRet).forEach(([key, value]) => {
-          if (trackSet.has(value)) {
-            selected[key] = value.reduce((p, v) => p[v], getRoot());
-            mapping.set(key, value);
-          } else {
-            throw ('only tracked prop is allowed in selectToPut for assignment!');
-          }
-        });
-      }
-      return { selected, draft: selected, mapping };
-    }
 
-    return {
-      select: () => execSelect().selected,
-      put: work => {
-        const newState = produceNewState(getRoot(), execSelect(), work);
-        putPromise = checkShouldUpdate(newState);
-      }
+  const execSelect = selector => {
+    const mapping = new Map();
+    if (!selector) {
+      mapping.set(ROOT_AS_DRAFT, null);
+      return { selected: getRoot(), draft: getRoot(), mapping }
+    };
+    if (!isPlainObject(getRoot())) {
+      throw ('only state of plain object deserves a selector for mapping!');
     }
+    const trackSet = new Set();
+    const selectorRet = selector(track.bind(null, trackSet));
+    let selected = {};
+    if (trackSet.has(selectorRet)) {
+      const path = selectorRet;
+      mapping.set(TRACK_AS_RET, path);
+      selected = path.reduce((p, v) => p[v], getRoot());
+    } else if (!isPlainObject(selectorRet) || Object.keys(selectorRet).length === 0) {
+      throw ('please at least track a prop for selector!');
+    } else {
+      mapping.set(SELECT_AS_RET, selectorRet);
+      Object.entries(selectorRet).forEach(([key, value]) => {
+        if (trackSet.has(value)) {
+          selected[key] = value.reduce((p, v) => p[v], getRoot());
+          mapping.set(key, value);
+        } else {
+          throw ('only tracked prop is allowed in selectToPut for assignment!');
+        }
+      });
+    }
+    return { selected, draft: selected, mapping };
   }
+  let putPromiseQuene = [];
+  const selectToPut = selector => ({
+    select: () => execSelect(selector).selected,
+    put: work => {
+      const newState = produceNewState(getRoot(), execSelect(selector), work);
+      putPromiseQuene.push(checkShouldUpdate(newState));
+    }
+  });
 
   const step = promise => steptify(promise, abortSignal);
   const [dispatchPromise, dispatchResolve, dispatchReject] = newPromise();
   const done = res => {
     // putPromise is the latest prommise which created from put
-    putPromise.then(() => dispatchResolve(res));
+    Promise.all(putPromiseQuene).then(() => dispatchResolve(res), dispatchReject);
   }
   if (abortSignal) subscribeAbort(abortSignal, dispatchReject);
   assignment(action, {
@@ -259,11 +257,9 @@ export const assemble = (parentConveyor, alias, childConveyor) => {
   const { [GET_STATE]: getChildState,
     [CHECK_UPDATE]: childCheckShouldUpdate,
     [ON_CHECK]: onChildCheck } = childConveyor;
-  const {
-    [GET_STATE]: getParentState,
+  const { [GET_STATE]: getParentState,
     [CHECK_UPDATE]: parentCheckShouldUpdate,
-    [ON_CHECK]: onParentCheck
-  } = parentConveyor;
+    [ON_CHECK]: onParentCheck } = parentConveyor;
   const parentState = getParentState();
   if (!isPlainObject(parentState)) {
     throw ('conveyor of non-plain object type could not assemble sub conveyor!');
