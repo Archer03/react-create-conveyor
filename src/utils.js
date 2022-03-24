@@ -88,7 +88,7 @@ export const hitSoy = (preState, nextState, [debugProps, debugEntry]) => {
 export const getMemoValue = (key, cacheMap, computeFn, deps) => {
   !cacheMap.get(key) && cacheMap.set(key, {});
   const cache = cacheMap.get(key);
-  const changed = !cache.oldDeps || 
+  const changed = !cache.oldDeps ||
     cache.oldDeps.length !== deps.length ||
     cache.oldDeps.some((old, index) => !Object.is(old, deps[index]));
   if (changed) {
@@ -115,4 +115,46 @@ export const isPlainObject = obj => {
     proto = Object.getPrototypeOf(proto);
   }
   return Object.getPrototypeOf(obj) === proto;
+}
+
+/**
+ * return a promise which can be aborted by abortSignal
+ */
+export const abortablePromise = (promise, abortSignal) => promise.then(res => {
+  if (abortSignal.aborted) return new Promise(() => { });
+  return res;
+}, error => {
+  if (abortSignal.aborted) return new Promise(() => { });
+  return error;
+});
+
+/**
+ * transfer a promise to an object which provides step & catch methods
+ * use step to make every step abortable
+ */
+export const steptify = (promise, abortSignal) => {
+  const abortOrNot = abortSignal ? abortablePromise(promise, abortSignal) : promise;
+  return {
+    step: (next, error) => steptify(abortOrNot.then(next, error), abortSignal),
+    catch: error => steptify(abortOrNot.then(res => res, error), abortSignal)
+  }
+};
+
+/**
+ * subscribe 'AbortError' from abortSignal
+ */
+export const subscribeAbort = (abortSignal, callback) => {
+  const emitAbort = () => {
+    const err = new Error(abortSignal.reason);
+    err.name = 'AbortError';
+    callback(err);
+  }
+  if (abortSignal.aborted) {
+    emitAbort();
+  } else {
+    abortSignal.addEventListener('abort', function onAbort() {
+      emitAbort();
+      abortSignal.removeEventListener('abort', onAbort);
+    });
+  }
 }

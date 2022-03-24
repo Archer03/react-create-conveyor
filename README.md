@@ -142,26 +142,24 @@ const E = () => {
 ### Cancellation
 
 ```javascript
-// use step to call api, and this is useful for cancellation
-myRegister('UPDATE_CANCEL', (action, { selectToPut }) => {
-  const { step } = selectToPut();
+// use step to make every step abortable
+// the usage of step(next, error) is compeletely the same as promise.then(next, error)
+myRegister('UPDATE_CANCEL', (action, { step, onAbort, abortSignal }) => {
   const mockApi = new Promise(res => setTimeout(res, 1000));
-  step(mockApi).then(() => console.log('mock api done.')); // do something after 1000ms
-})
+  step(mockApi) // pass a promise at first
+    .step(() => console.log('mock api done.')) // done
+    .step(() => new Promise(res => setTimeout(res, 1000)))
+    .step(() => console.log('next step done.')) // won't be done, for 1500ms < 2000ms👇
+  
+  onAbort(reason => console.log('onAbort: ', reason)); // listen cancellation and unsubscribe automatically
+  setTimeout(() => console.log(abortSignal.aborted), 3000); // check whether aborted
+});
 
-const abortCtrl = new AbortController();
+const abortCtrl = new AbortController(); // create an abortController, and pass its signal to dispatch
 myDispatch({ type: 'UPDATE_CANCEL' }, abortCtrl.signal).catch(err => {
-  if (err?.name === 'AbortError') console.log(err.message);
-})
-setTimeout(() => abortCtrl.abort('cancel assignment'), 500); // cancel after 500ms
-```
-
-what will happen after abortCtrl.abort() is called? 👇\
-all of the pending step will stay at pending forever
-
-```javascript
-// for example 500ms < 1000ms
-step(mockApi).then(() => { // will never be executed });
+  if (err?.name === 'AbortError') console.log('cancel reason: ', err.message);
+});
+setTimeout(() => abortCtrl.abort('cancel assignment'), 1500); // cancel after 1500ms🚫
 ```
 
 ## Assemble sub conveyor

@@ -1,5 +1,5 @@
 import { useEffect, useReducer, useCallback, useRef } from 'react';
-import { produceNewState, hitSoy, isPlainObject, getMemoValue, newPromise, selectedChanged } from './utils';
+import { produceNewState, hitSoy, isPlainObject, getMemoValue, newPromise, selectedChanged, steptify, subscribeAbort } from './utils';
 
 const GET_STATE = Symbol();
 const CHECK_UPDATE = Symbol();
@@ -184,21 +184,6 @@ export const dispatch = (conveyor, action, abortSignal) => {
     [ASSIGN_MAP]: assignmentMap } = conveyor;
   const assignment = assignmentMap.get(action.type);
   if (!assignment) throw ('no type registered!');
-  if (abortSignal) {
-    const rejectReasonOut = () => {
-      const err = new Error(abortSignal.reason);
-      err.name = 'AbortError';
-      dispatchReject(err);
-    }
-    if (abortSignal.aborted) {
-      rejectReasonOut();
-    } else {
-      abortSignal.addEventListener('abort', function onAbort() {
-        rejectReasonOut();
-        abortSignal.removeEventListener('abort', onAbort);
-      });
-    }
-  }
 
   const track = (trackSet, ...path) => {
     if (path.length === 0) throw ('path needed!');
@@ -238,25 +223,32 @@ export const dispatch = (conveyor, action, abortSignal) => {
       }
       return { selected, draft: selected, mapping };
     }
+
     return {
       select: () => execSelect().selected,
       put: work => {
         const newState = produceNewState(getRoot(), execSelect(), work);
         putPromise = checkShouldUpdate(newState);
-      },
-      step: promise => promise.then(res => {
-        if (abortSignal?.aborted) return new Promise(() => { });
-        return res;
-      })
+      }
     }
   }
 
+  const step = promise => steptify(promise, abortSignal);
   const [dispatchPromise, dispatchResolve, dispatchReject] = newPromise();
   const done = res => {
     // putPromise is the latest prommise which created from put
     putPromise.then(() => dispatchResolve(res));
   }
-  assignment(action, { selectToPut, state: getRoot, done, fail: dispatchReject });
+  if (abortSignal) subscribeAbort(abortSignal, dispatchReject);
+  assignment(action, {
+    state: getRoot,
+    selectToPut,
+    step,
+    done,
+    fail: dispatchReject,
+    abortSignal,
+    onAbort: cb => subscribeAbort(abortSignal, error => cb(error.message))
+  });
   return dispatchPromise;
 }
 
