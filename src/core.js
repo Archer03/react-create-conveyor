@@ -13,7 +13,7 @@ export const ROOT_AS_DRAFT = Symbol();
 
 export const CUR_SELECTED = Symbol();
 
-export const createInstance = (state, debugTarget) => {
+export const createInstance = state => {
   const updaters = new Set();
   const assignmentMap = new Map();
   const onCheckUpdate = [];
@@ -226,6 +226,7 @@ export const dispatch = (conveyor, action, abortSignal) => {
   const selectToPut = selector => ({
     select: () => execSelect(selector).selected,
     put: work => {
+      if (abortSignal.aborted) throw ('please do not modify state after dispatch is aborted!');
       const newState = produceNewState(getRoot(), execSelect(selector), work);
       putPromiseQuene.push(checkShouldUpdate(newState));
     }

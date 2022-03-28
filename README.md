@@ -115,7 +115,7 @@ myRegister('ULTIMATE_EVOLUTION', (action, { selectToPut, state, done }) => {
   }));
   const rootState = state(); // get anything from root state
   console.log(`${rootState.owner}: ${getDog().name} ultimate evolution.`);
-  setTimeout(() => {
+  setTimeout(() => { // to modify state in async callback
     grow(age => age * 10);
     evolve(draft => {
       draft.name = '钢铁加鲁鲁(Metal Garurumon)';
@@ -162,7 +162,7 @@ myDispatch({ type: 'UPDATE_CANCEL' }, abortCtrl.signal).catch(err => {
 setTimeout(() => abortCtrl.abort('cancel assignment'), 1500); // cancel after 1500ms🚫
 ```
 
-## Assemble sub conveyor
+## Modules
 
 ```javascript
 const [useGlobal, { assemble: globalAssemble }] = createConveyor({}); // created a global conveyor
