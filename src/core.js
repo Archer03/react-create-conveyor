@@ -63,9 +63,9 @@ export const useConveyor = (conveyor, selector, externalDeps) => {
     memoSet.add(memoInfo);
     return memoInfo;
   }
-  const task = (memoSet, reducer, deps) => {
+  const task = (memoSet, producer, deps) => {
     const taskFn = (...params) => {
-      const work = draft => reducer(draft, ...params);
+      const work = draft => producer(draft, ...params);
       const newState = produceNewState(getRoot(), execSelect(), work);
       checkShouldUpdate(newState);
     }
