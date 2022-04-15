@@ -140,14 +140,15 @@ export const useConveyor = (conveyor, selector, externalDeps) => {
 
   return [
     useSyncExternalStore(useCallback(callback => {
-      updaters.add(() => {
+      const tryNotify = () => {
         if (doCheckRef.current?.doCheckPromise) return doCheckRef.current.doCheckPromise;
         const [doCheckPromise, doCheckResolve] = newPromise();
         doCheckRef.current = { doCheckPromise, doCheckResolve };
         callback();
         return doCheckPromise;
-      });
-      return () => updaters.delete(callback);
+      }
+      updaters.add(tryNotify);
+      return () => updaters.delete(tryNotify);
     }, []), getSnapshot),
     useCallback(work => {
       const newState = produceNewState(getRoot(), execSelect(), work);
