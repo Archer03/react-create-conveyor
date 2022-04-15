@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useCallback, useRef } from 'react';
+import { useEffect, useReducer, useCallback, useRef, useSyncExternalStore } from 'react';
 import { produceNewState, hitSoy, isPlainObject, getMemoValue, newPromise, selectedChanged, steptify, subscribeAbort } from './utils';
 
 const GET_STATE = Symbol();
@@ -129,36 +129,26 @@ export const useConveyor = (conveyor, selector, externalDeps) => {
   }
 
   const doCheckRef = useRef(null);
-  let selectInfo = null;
-  if (doCheckRef.current?.doCheckResolve) {
-    selectInfo = execSelect();
-    doCheckRef.current.doCheckResolve();
-    doCheckRef.current = null;
-  } else {
-    selectInfo = externalDeps ? getMemoValue(CUR_SELECTED, memoCacheMap, execSelect, externalDeps) : execSelect();
+  doCheckRef.current?.doCheckResolve?.();
+  doCheckRef.current = null;
+  const selectedRef = useRef(null);
+  const getSnapshot = () => {
+    const selectInfo = execSelect();
+    if (!selectedChanged(selectedRef.current, selectInfo)) return selectedRef.current;
+    return selectedRef.current = selectInfo.selected;
   }
-  const selectedRef = useRef(selectInfo.selected);
-  if (selectedChanged(selectedRef.current, selectInfo)) {
-    selectedRef.current = selectInfo.selected;
-  }
-
-  const [, forceUpdate] = useReducer(x => x + 1, 0);
-  const doCheck = () => {
-    // 这里的缓冲是可信任的，因为rerender execSelect到doCheckRef.current = null之间是同步执行
-    if (doCheckRef.current?.doCheckPromise) return doCheckRef.current.doCheckPromise;
-    if (selector && !selectedChanged(selectedRef.current, execSelect(true))) return Promise.resolve();
-    const [doCheckPromise, doCheckResolve] = newPromise();
-    doCheckRef.current = { doCheckPromise, doCheckResolve };
-    forceUpdate(); // first time forceUpdate render sync and takes more time
-    return doCheckPromise;
-  }
-  useEffect(() => {
-    updaters.add(doCheck);
-    return () => updaters.delete(doCheck);
-  }, [selectedRef.current]);
 
   return [
-    selectedRef.current,
+    useSyncExternalStore(useCallback(callback => {
+      updaters.add(() => {
+        if (doCheckRef.current?.doCheckPromise) return doCheckRef.current.doCheckPromise;
+        const [doCheckPromise, doCheckResolve] = newPromise();
+        doCheckRef.current = { doCheckPromise, doCheckResolve };
+        callback();
+        return doCheckPromise;
+      });
+      return () => updaters.delete(callback);
+    }, []), getSnapshot),
     useCallback(work => {
       const newState = produceNewState(getRoot(), execSelect(), work);
       checkShouldUpdate(newState);
@@ -226,7 +216,7 @@ export const dispatch = (conveyor, action, abortSignal) => {
   const selectToPut = selector => ({
     select: () => execSelect(selector).selected,
     put: work => {
-      if (abortSignal.aborted) throw ('please do not modify state after dispatch is aborted!');
+      if (abortSignal?.aborted) throw ('please do not modify state after dispatch is aborted!');
       const newState = produceNewState(getRoot(), execSelect(selector), work);
       putPromiseQuene.push(checkShouldUpdate(newState));
     }
