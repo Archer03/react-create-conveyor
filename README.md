@@ -47,50 +47,48 @@ const B = () => {
   return <button onClick={() => setCount(count + 1)}>B{count}</button>
 }
 
-// use select to collect mappings (select -> in order to cache variable reference)
+// use select to collect mappings
 // use state to get values from root state
 // use memo to cache calculation
-// use task to define any assignment method
 const C = () => {
-  const [dog, drawDog] = useMyData(({ select, track, state, memo, task }) => select({
-    cName: track('dog', 'name'),
-    cBreed: track('dog', 'breed'),
-    cAge: track('dog', 'age'),
-    fullName: state().dog.name + state().dog.breed,
-    // memoName calculation is now dependent on dog.age
-    memoName: memo(() => state().dog.name + state().dog.breed, [state().dog.age]),
-    myDisaptch: task((draft, { type, payload }) => { // redux style
-      if (type === 'RESET') {
-        draft.cAge = payload; // only tracked props will be added to draft!
-        draft.cName = 'xiao bai'; // eg. fullName dose not exist in draft
-        draft.cBreed = '🐶';
-      }
-    })
-  }));
+  // why to use select?
+  // eg. useMyData(({ state }) => state().dog) // dog is not a recombination object, we won't check its inner keys
+  // so select is to mark it as a recombination object
+  const [dog, drawDog, useTask] = useMyData(({ select, track, state, memo }) => 
+    select({ // 👈 use select
+      cName: track('dog', 'name'),
+      cBreed: track('dog', 'breed'),
+      cAge: track('dog', 'age'),
+      fullName: state.dog.name + state.dog.breed,
+      // memoName calculation is now dependent on dog.age
+      memoName: memo(() => state.dog.name + state.dog.breed, [state.dog.age]),
+    }));
+
+  // useTask to define method
+  const reset = useTask((draft, payload) => {
+    draft.cAge = payload; // only tracked props will be added to draft!
+    draft.cName = 'xiao bai'; // eg. fullName dose not exist in draft
+    draft.cBreed = '🐶';
+  })
   return <div>
     <button onClick={() => drawDog(draft => {
-      draft.cName = 'da huang'; // just draw it in producer
+      draft.cName = 'da huang'; // just draw it, able to modify cName directly! 💥
       draft.cBreed += '🐕'; // next immutable state created by powerful immerJS
-    })}>C {dog.fullName}</button>
+    })}>C full:{dog.fullName}</button>
+    <button onClick={() => reset(2)}>reset {dog.cAge}</button>
     memo:{dog.memoName}
-    <button onClick={() =>
-      dog.myDisaptch({ type: 'RESET', payload: 2 })
-    }>reset {dog.cAge}</button>
   </div>
 }
 
 // track is not necessary
 const D = () => {
-  const [{ dNum, upTen }, myUpdate] = useMyData(({ select, state, task }) => select({
-    dNum: state().count,
-    // for no prop tracked, draft will be proxy of root state
-    upTen: task(draft => { draft.count += 10 }) // use count but not dNum
-  }));
+  const [dogAge1, updateState] = useMyData(({ state }) => state.dog.age); // no prop tracked
+  const [dogAge2, updateAge] = useMyData(({ track }) => track('dog', 'age'));
   return <div>
-    <button onClick={upTen}>D upTen{dNum}</button>
-    <button onClick={() => myUpdate(draft => { draft.dog.age++ })}>
-      noTrack dogAge+
-    </button>
+    D {dogAge1}
+    {/* for no prop tracked, draft will be proxy of root state */}
+    <button onClick={() => updateState(draft => { draft.dog.age++ })}>noTrack dogAge+</button>
+    <button onClick={() => updateAge(draft => ++draft)}>track dogAge+</button>
   </div>
 }
 ```
@@ -128,10 +126,10 @@ myRegister('ULTIMATE_EVOLUTION', (action, { selectToPut, state, done }) => {
 })
 
 const E = () => {
-  const [age] = useMyDog(({ state }) => state().dog.age);
-  const [{ name, breed }] = useMyDog(({ state, select }) => select({
-    name: state().dog.name,
-    breed: state().dog.breed
+  const [{ age, name, breed }] = useMyDog(({ state, select }) => select({
+    age: state.dog.age,
+    name: state.dog.name,
+    breed: state.dog.breed
   }));
   return <button onClick={() =>
     myDispatch({ type: 'ULTIMATE_EVOLUTION' }).then(ability => console.log(ability))
@@ -194,7 +192,7 @@ autorun([['dog', 'age']], changed => {
 
 ## Drawback
 
-Same as react-redux, any state change will trigger notification to all connected component for checking. So please don't put all data into a global conveyor if you could. But the good news is that react-create-conveyor dosen't need Context/Provider, so it is very easy to create and use sub conveyors!
+Similar to react-redux, any state change will trigger notification to all connected components for checking. So please don't put all data into a single global conveyor if you could. But the good news is that react-create-conveyor dosen't need Context/Provider, so it is very easy to create and use sub conveyors whenever and wherever!
 
 \
 other nice solutions: mobx, jotai, zustand, recoil\

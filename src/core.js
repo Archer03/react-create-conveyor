@@ -62,14 +62,6 @@ export const useConveyor = (conveyor, selector) => {
     memoSet.add(memoInfo);
     return memoInfo;
   }
-  const task = (memoSet, producer, deps) => {
-    const taskFn = (...params) => {
-      const work = draft => producer(draft, ...params);
-      const newState = produceNewState(getRoot(), execSelect(), work);
-      checkShouldUpdate(newState);
-    }
-    return memo(memoSet, () => taskFn, deps ? deps : []);
-  }
 
   const execSelect = () => {
     let mapping = new Map();
@@ -83,11 +75,10 @@ export const useConveyor = (conveyor, selector) => {
     const trackSet = new Set();
     const memoSet = new Set();
     let selectorRet = selector({
-      state: getRoot,
+      state: getRoot(),
       select: select.bind(null, selectSet),
       track: track.bind(null, trackSet),
       memo: memo.bind(null, memoSet),
-      task: task.bind(null, memoSet)
     });
     if (trackSet.has(selectorRet)) { // useMyData(({ track }) => track('count')); // tracked prop as selector ret
       const path = selectorRet;
@@ -148,12 +139,22 @@ export const useConveyor = (conveyor, selector) => {
   const selectedRef = useRef(null); // take care that selectInfo.draft version maybe too old while selected is correct
   selectedRef.current = selectInfo.selected;
 
+  const useTask = (clientProducer, deps) => {
+    const taskFn = (...params) => {
+      const work = draft => clientProducer(draft, ...params);
+      const newState = produceNewState(getRoot(), execSelect(), work);
+      checkShouldUpdate(newState);
+    }
+    return useCallback(taskFn, deps);
+  }
+
   return [
     selectInfo.selected,
     useCallback(work => {
       const newState = produceNewState(getRoot(), execSelect(), work);
       checkShouldUpdate(newState);
-    }, [])
+    }, []),
+    useTask
   ];
 }
 

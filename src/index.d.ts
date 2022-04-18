@@ -8,12 +8,18 @@ export interface Conveyor<T> {
 }
 
 type UseConveyor<State> = <SelectorRet>(selector?: (operators: Operators<State>) => SelectorRet) => SelectorRet extends undefined
-  ? [selected: State, modifyFn: ModifyFunction<State>]
-  : [selected: Selected<SelectorRet>, modifyFn: ModifyFunction<keyof Draft<SelectorRet> extends never ? State : Draft<SelectorRet>>]
+  ? [selected: State, modifyFn: ModifyFunction<State>, useTask: UseTask<State>]
+  : [
+    selected: Selected<SelectorRet>,
+    modifyFn: ModifyFunction<keyof Draft<SelectorRet> extends never ? State : Draft<SelectorRet>>,
+    useTask: UseTask<keyof Draft<SelectorRet> extends never ? State : Draft<SelectorRet>>
+  ]
 
 type ModifyFunction<T> = (valueOrProducer: ValueOrProducer<T>) => void
 type ValueOrProducer<T> = ((draft: T) => (void | T)) | T
 // type ValueOrProducer<T> = true extends true ?  ((draft: T) => (void | T)) | T : never // to show detail tips in editor
+type UseTask<T> = <Payload>(clientProducer: ClientProducer<T, Payload>, deps?: any[]) => (payload: Payload) => void
+type ClientProducer<T, Payload> = (draft: T, payload?: Payload) => (void | T)
 
 type TrackedValue<T> = { TRACKED: T }
 type SelectValue<T> = { SELECTED: T }
@@ -43,7 +49,7 @@ type Draft<T> =
   : T
 
 /**
- * to avoid typescript error, when i confirm that it is absolute correct to expect T[K]
+ * to avoid typescript error, when i confirm that this is absolute correct to expect T[K]
  */
 type AbsoluteIndex<T, K> = K extends keyof T ? T[K] : never
 
@@ -53,9 +59,8 @@ type AbsoluteIndex<T, K> = K extends keyof T ? T[K] : never
 interface Operators<State> {
   select: <T>(selected: T) => SelectValue<T>
   track: <T>(...path: string[]) => TrackedValue<T>
-  state: () => State
+  state: State
   memo: <T>(computeFn: () => T, deps: any[]) => T
-  task: (producer: ModifyFunction<unknown>, deps?: any[]) => void // the biggest problem is i cannot get selected type here, so task will lost type
 }
 
 type Assignment<State, T> = (action: { type: T, payload: any }, assignmentOpts: {
