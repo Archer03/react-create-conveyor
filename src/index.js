@@ -5,8 +5,8 @@ export const createConveyor = state => {
   const selfInstance = createInstance(state);
   // [hook, { register, dispatch, assemble, autorun }]
   return [
-    (selector, externalDeps) => {
-      return useConveyor(selfInstance, selector, externalDeps);
+    selector => {
+      return useConveyor(selfInstance, selector);
     },
     selfInstance
   ]

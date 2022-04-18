@@ -6,11 +6,11 @@ import { TRACK_AS_RET, ROOT_AS_DRAFT, SELECT_AS_RET } from './core';
  */
 export const selectedChanged = (preSelected, selectInfo) => {
   const { selected, mapping } = selectInfo;
-  if (mapping.has(TRACK_AS_RET) || mapping.has(ROOT_AS_DRAFT)) {
-    return !Object.is(preSelected, selected);
+  if (mapping.has(SELECT_AS_RET)) {
+    return Object.entries(preSelected)
+      .some(([key, value]) => !Object.is(value, selected[key]));
   }
-  return Object.entries(preSelected)
-    .some(([key, value]) => !Object.is(value, selected[key]));
+  return !Object.is(preSelected, selected);
 }
 
 /**

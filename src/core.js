@@ -1,4 +1,5 @@
-import { useEffect, useReducer, useCallback, useRef, useSyncExternalStore } from 'react';
+import { useCallback, useRef } from 'react';
+import { useSyncExternalStoreWithSelector } from "use-sync-external-store/shim/with-selector"
 import { produceNewState, hitSoy, isPlainObject, getMemoValue, newPromise, selectedChanged, steptify, subscribeAbort } from './utils';
 
 const GET_STATE = Symbol();
@@ -10,8 +11,6 @@ const ASSIGN_MAP = Symbol();
 export const SELECT_AS_RET = Symbol();
 export const TRACK_AS_RET = Symbol();
 export const ROOT_AS_DRAFT = Symbol();
-
-export const CUR_SELECTED = Symbol();
 
 export const createInstance = state => {
   const updaters = new Set();
@@ -44,7 +43,7 @@ export const createInstance = state => {
 /**
  * useConveyor hook
  */
-export const useConveyor = (conveyor, selector, externalDeps) => {
+export const useConveyor = (conveyor, selector) => {
   const { [GET_STATE]: getRoot, [CHECK_UPDATE]: checkShouldUpdate, [UPDATERS]: updaters } = conveyor;
   const select = (selectSet, remapped) => {
     if (!isPlainObject(remapped) || Object.keys(remapped).length === 0) {
@@ -74,7 +73,7 @@ export const useConveyor = (conveyor, selector, externalDeps) => {
 
   const execSelect = () => {
     let mapping = new Map();
-    if (!selector) {
+    if (!selector) { // @todo may selector changed? so think about deps
       mapping.set(ROOT_AS_DRAFT, null);
       return { selected: getRoot(), draft: getRoot(), mapping };
     } else if (!isPlainObject(getRoot())) {
@@ -129,31 +128,32 @@ export const useConveyor = (conveyor, selector, externalDeps) => {
   }
 
   const doCheckRef = useRef(null);
-  doCheckRef.current?.doCheckResolve?.();
+  doCheckRef.current?.doCheckResolve?.(); // to detect whether render is triggered
   doCheckRef.current = null;
-  const selectedRef = useRef(null);
-  const getSnapshot = () => {
-    const selectInfo = execSelect();
-    if (!selectedChanged(selectedRef.current, selectInfo)) return selectedRef.current;
-    return selectedRef.current = selectInfo.selected;
-  }
+
+  const subscribe = useCallback(notify => {
+    const doCheck = () => {
+      if (doCheckRef.current?.doCheckPromise) return doCheckRef.current.doCheckPromise;
+      if (!selectedChanged(selectedRef.current, execSelect())) return Promise.resolve();
+      const [doCheckPromise, doCheckResolve] = newPromise();
+      doCheckRef.current = { doCheckPromise, doCheckResolve };
+      notify();
+      return doCheckPromise;
+    }
+    updaters.add(doCheck);
+    return () => updaters.delete(doCheck);
+  }, []);
+  const equalFn = (pre, cur) => !selectedChanged(pre.selected, cur);
+  const selectInfo = useSyncExternalStoreWithSelector(subscribe, getRoot, null, execSelect, equalFn);
+  const selectedRef = useRef(null); // take care that selectInfo.draft version maybe too old while selected is correct
+  selectedRef.current = selectInfo.selected;
 
   return [
-    useSyncExternalStore(useCallback(callback => {
-      const tryNotify = () => {
-        if (doCheckRef.current?.doCheckPromise) return doCheckRef.current.doCheckPromise;
-        const [doCheckPromise, doCheckResolve] = newPromise();
-        doCheckRef.current = { doCheckPromise, doCheckResolve };
-        callback();
-        return doCheckPromise;
-      }
-      updaters.add(tryNotify);
-      return () => updaters.delete(tryNotify);
-    }, []), getSnapshot),
+    selectInfo.selected,
     useCallback(work => {
       const newState = produceNewState(getRoot(), execSelect(), work);
       checkShouldUpdate(newState);
-    }, [selectedRef.current])
+    }, [])
   ];
 }
 

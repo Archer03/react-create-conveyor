@@ -73,4 +73,4 @@ type SteptifyObj<T> = {
 }
 
 type DebugProps = [] | string[][]
-type DebugEntry = (changed: { pre: any, next: any }) => void
+type DebugEntry = (changed: { pre: any, next: any }[]) => void

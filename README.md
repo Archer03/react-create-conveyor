@@ -1,8 +1,9 @@
-# react-create-conveyor
+# react-create-conveyor🛸
 
 A state-management solution for react in Provider-less mode\
 Based on immerJS\
-Just get value,  and set value, it's all ⚽
+Just get value,  and set value, it's all ⚽\
+It is now compatible with concurrent mode and supports typescript!
 
 ```javascript
 import { createConveyor } from 'react-create-conveyor';
@@ -46,7 +47,7 @@ const B = () => {
   return <button onClick={() => setCount(count + 1)}>B{count}</button>
 }
 
-// use select to collect mappings
+// use select to collect mappings (select -> in order to cache variable reference)
 // use state to get values from root state
 // use memo to cache calculation
 // use task to define any assignment method
@@ -128,7 +129,7 @@ myRegister('ULTIMATE_EVOLUTION', (action, { selectToPut, state, done }) => {
 
 const E = () => {
   const [age] = useMyDog(({ state }) => state().dog.age);
-  const [{ name, breed }] = useMyDog(({ state }) => ({
+  const [{ name, breed }] = useMyDog(({ state, select }) => select({
     name: state().dog.name,
     breed: state().dog.breed
   }));
@@ -191,5 +192,10 @@ autorun([['dog', 'age']], changed => {
 })
 ```
 
+## Drawback
+
+Same as react-redux, any state change will trigger notification to all connected component for checking. So please don't put all data into a global conveyor if you could. But the good news is that react-create-conveyor dosen't need Context/Provider, so it is very easy to create and use sub conveyors!
+
+\
 other nice solutions: mobx, jotai, zustand, recoil\
 which are designed to be more comprehensive 🦸
