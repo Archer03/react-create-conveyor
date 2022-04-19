@@ -7,13 +7,17 @@ export interface Conveyor<T> {
   autorun: (debugProps: DebugProps, debugEntry: DebugEntry) => void
 }
 
-type UseConveyor<State> = <SelectorRet>(selector?: (operators: Operators<State>) => SelectorRet) => SelectorRet extends undefined
-  ? [selected: State, modifyFn: ModifyFunction<State>, useTask: UseTask<State>]
-  : [
+/**
+ * overload
+ */
+type UseConveyor<State> = {
+  (): [selected: State, modifyFn: ModifyFunction<State>, useTask: UseTask<State>]
+  <SelectorRet>(selector: (operators: Operators<State>) => SelectorRet): [
     selected: Selected<SelectorRet>,
     modifyFn: ModifyFunction<keyof Draft<SelectorRet> extends never ? State : Draft<SelectorRet>>,
     useTask: UseTask<keyof Draft<SelectorRet> extends never ? State : Draft<SelectorRet>>
   ]
+}
 
 type ModifyFunction<T> = (valueOrProducer: ValueOrProducer<T>) => void
 type ValueOrProducer<T> = ((draft: T) => (void | T)) | T
@@ -53,12 +57,22 @@ type Draft<T> =
  */
 type AbsoluteIndex<T, K> = K extends keyof T ? T[K] : never
 
+type KeyPath<D> = readonly [] | (
+  { [Key in keyof D]: readonly [Key] | KeyPathInfinite<[Key], D[Key]> }[keyof D]
+)
+type KeyPathInfinite<Pres extends any[], D> = D extends NormalTypes ? never :
+  { [Key in keyof D]: readonly [...Pres, Key] | KeyPathInfinite<[...Pres, Key], D[Key]> }[keyof D]
+
+type PickValue<State, PathArr> = PathArr extends readonly [infer First, ...infer Rest]
+  ? Rest extends [] ? AbsoluteIndex<State, First> : PickValue<AbsoluteIndex<State, First>, Rest>
+  : never
+
 /**
  * usage: ({ track }) => ({ dogAge: track<number>('dog', 'age')
  */
 interface Operators<State> {
   select: <T>(selected: T) => SelectValue<T>
-  track: <T>(...path: string[]) => TrackedValue<T>
+  track: <P extends KeyPath<State>>(...path: P) => TrackedValue<PickValue<State, P>>
   state: State
   memo: <T>(computeFn: () => T, deps: any[]) => T
 }
@@ -79,3 +93,5 @@ type SteptifyObj<T> = {
 
 type DebugProps = [] | string[][]
 type DebugEntry = (changed: { pre: any, next: any }[]) => void
+
+type NormalTypes = number | string | boolean | symbol | bigint | null | undefined | any[] | readonly any[] | Function

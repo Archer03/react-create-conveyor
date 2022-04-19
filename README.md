@@ -53,7 +53,7 @@ const B = () => {
 const C = () => {
   // why to use select?
   // eg. useMyData(({ state }) => state().dog) // dog is not a recombination object, we won't check its inner keys
-  // so select is to mark it as a recombination object
+  // so select is to mark it as a recombination object and know how to check it
   const [dog, drawDog, useTask] = useMyData(({ select, track, state, memo }) => 
     select({ // 👈 use select
       cName: track('dog', 'name'),
@@ -66,8 +66,10 @@ const C = () => {
 
   // useTask to define method
   const reset = useTask((draft, payload) => {
-    draft.cAge = payload; // only tracked props will be added to draft!
-    draft.cName = 'xiao bai'; // eg. fullName dose not exist in draft
+    // only tracked props will be added to draft!
+    // eg. fullName dose not exist in draft, and don't worry, typescript will even remind you!
+    draft.cAge = payload;
+    draft.cName = 'xiao bai';
     draft.cBreed = '🐶';
   })
   return <div>
@@ -121,7 +123,7 @@ myRegister('ULTIMATE_EVOLUTION', (action, { selectToPut, state, done }) => {
       draft.breed = '🐺';
     });
     console.log(`${getDog().name}`);
-    done('绝对冷冻气(Cocytus Breath)'); // resolve the promise return from dispatch
+    done('绝对冷冻气(Cocytus Breath)'); // try to resolve the promise return from dispatch
   }, 2000);
 })
 
@@ -133,7 +135,8 @@ const E = () => {
   }));
   return <button onClick={() =>
     myDispatch({ type: 'ULTIMATE_EVOLUTION' }).then(ability => console.log(ability))
-    // ability will be printed after all impacted rerender is ok
+    // ability will be printed after all impacted rerender is ok 🥳
+    // so the promise returned from dispatch is safe
   }>E async 2s {age} {name} {breed}</button>
 }
 ```
