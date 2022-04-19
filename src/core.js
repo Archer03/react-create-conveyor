@@ -45,71 +45,6 @@ export const createInstance = state => {
  */
 export const useConveyor = (conveyor, selector) => {
   const { [GET_STATE]: getRoot, [CHECK_UPDATE]: checkShouldUpdate, [UPDATERS]: updaters } = conveyor;
-  const select = (selectSet, remapped) => {
-    if (!isPlainObject(remapped) || Object.keys(remapped).length === 0) {
-      throw ('please pass a plain object and at least select a prop for selector!')
-    }
-    selectSet.add(remapped);
-    return remapped;
-  }
-  const track = (trackSet, ...path) => {
-    if (path.length === 0) throw ('path needed!');
-    trackSet.add(path)
-    return path;
-  }
-  const memo = (memoSet, computeFn, deps) => {
-    const memoInfo = { computeFn, deps };
-    memoSet.add(memoInfo);
-    return memoInfo;
-  }
-
-  const execSelect = () => {
-    let mapping = new Map();
-    if (!selector) { // @todo may selector changed? so think about deps
-      mapping.set(ROOT_AS_DRAFT, null);
-      return { selected: getRoot(), draft: getRoot(), mapping };
-    } else if (!isPlainObject(getRoot())) {
-      throw ('only state of plain object deserves a selector for mapping!');
-    }
-    const selectSet = new Set();
-    const trackSet = new Set();
-    const memoSet = new Set();
-    let selectorRet = selector({
-      state: getRoot(),
-      select: select.bind(null, selectSet),
-      track: track.bind(null, trackSet),
-      memo: memo.bind(null, memoSet),
-    });
-    if (trackSet.has(selectorRet)) { // useMyData(({ track }) => track('count')); // tracked prop as selector ret
-      const path = selectorRet;
-      mapping.set(TRACK_AS_RET, path);
-      const selected = path.reduce((p, v) => p[v], getRoot());
-      return { selected, draft: selected, mapping };
-    } else if (!selectSet.has(selectorRet)) {
-      if (trackSet.size > 0 || memoSet.size > 0) {
-        throw ('track, memo, task could only work with select, check whether select is used!');
-      }
-      mapping.set(ROOT_AS_DRAFT, null);
-      return { selected: selectorRet, draft: getRoot(), mapping };
-    }
-    mapping.set(SELECT_AS_RET, selectorRet);
-    let selected = {}, draft = {};
-    Object.entries(selectorRet).forEach(([key, value]) => {
-      if (trackSet.has(value)) {
-        selected[key] = draft[key] = value.reduce((p, v) => p[v], getRoot());
-      } else if (memoSet.has(value)) {
-        const { computeFn, deps } = value;
-        selected[key] = getMemoValue(key, memoCacheMap, computeFn, deps);
-      } else {
-        selected[key] = value;
-      }
-    });
-    if (trackSet.size === 0) {
-      draft = getRoot();
-      mapping.set(ROOT_AS_DRAFT, null);
-    }
-    return { selected, draft, mapping };
-  }
 
   const conveyorRef = useRef(conveyor);
   const { current: memoCacheMap } = useRef(new Map());
@@ -118,12 +53,19 @@ export const useConveyor = (conveyor, selector) => {
     memoCacheMap.clear(); // useRef will be kept despite even js file rebuild in dev?
   }
 
+  // selector reference always changes, it will be a disaster if subscribe it
+  // doCheck and useTask just own the first execSelect reference
+  const execSelect = getSelectThunk(selector, getRoot, memoCacheMap);
+
   const doCheckRef = useRef(null);
   doCheckRef.current?.doCheckResolve?.(); // to detect whether render is triggered
   doCheckRef.current = null;
 
   const subscribe = useCallback(notify => {
     const doCheck = () => {
+      // if render is pending, then abandon notifying
+      // it is safe because every render will get latest selection, and after that we are able to notify again
+      // return promise for checkShouldUpdate helps to know when all the impacted component is rerendered
       if (doCheckRef.current?.doCheckPromise) return doCheckRef.current.doCheckPromise;
       if (!selectedChanged(selectedRef.current, execSelect())) return Promise.resolve();
       const [doCheckPromise, doCheckResolve] = newPromise();
@@ -135,6 +77,7 @@ export const useConveyor = (conveyor, selector) => {
     return () => updaters.delete(doCheck);
   }, []);
   const equalFn = (pre, cur) => !selectedChanged(pre.selected, cur);
+  // every render will cause execSelect, and selectInfo is cached until the custom selection changed
   const selectInfo = useSyncExternalStoreWithSelector(subscribe, getRoot, null, execSelect, equalFn);
   const selectedRef = useRef(null); // take care that selectInfo.draft version maybe too old while selected is correct
   selectedRef.current = selectInfo.selected;
@@ -158,6 +101,81 @@ export const useConveyor = (conveyor, selector) => {
   ];
 }
 
+const operatorsForSelector = {
+  select: (selectSet, remapped) => {
+    if (!isPlainObject(remapped) || Object.keys(remapped).length === 0) {
+      throw ('please pass a plain object and at least select a prop for selector!')
+    }
+    selectSet.add(remapped);
+    return remapped;
+  },
+  track: (trackSet, ...path) => {
+    if (path.length === 0) throw ('path needed!');
+    trackSet.add(path)
+    return path;
+  },
+  memo: (memoSet, computeFn, deps) => {
+    const memoInfo = { computeFn, deps };
+    memoSet.add(memoInfo);
+    return memoInfo;
+  }
+}
+
+/**
+ * return a select function help to get the latest custom selection and draft target
+ * only the tracked key will exist in draft
+ * @returns { selected, draft, mapping }
+ */
+const getSelectThunk = (selector, getRoot, memoCacheMap) => () => {
+  const { select, track, memo } = operatorsForSelector;
+  let mapping = new Map();
+  if (!selector) {
+    mapping.set(ROOT_AS_DRAFT, null);
+    return { selected: getRoot(), draft: getRoot(), mapping };
+  }
+  const selectSet = new Set();
+  const trackSet = new Set();
+  const memoSet = new Set();
+  const selectorRet = selector({
+    state: getRoot(),
+    select: select.bind(null, selectSet),
+    track: track.bind(null, trackSet),
+    memo: memo.bind(null, memoSet),
+  });
+  if (trackSet.has(selectorRet)) { // useMyData(({ track }) => track('count')); // tracked prop as selector ret
+    const path = selectorRet;
+    mapping.set(TRACK_AS_RET, path);
+    const selected = path.reduce((p, v) => p[v], getRoot());
+    return { selected, draft: selected, mapping };
+  } else if (!selectSet.has(selectorRet)) {
+    if (trackSet.size || memoSet.size) {
+      throw ('track and memo could only work with select, check whether select is used!');
+    }
+    mapping.set(ROOT_AS_DRAFT, null);
+    return { selected: selectorRet, draft: getRoot(), mapping };
+  }
+
+  // if selectorRet is the value return from select operator
+  // then mark it as a recombination object
+  mapping.set(SELECT_AS_RET, selectorRet);
+  let selected = {}, draft = {};
+  Object.entries(selectorRet).forEach(([key, value]) => {
+    if (trackSet.has(value)) {
+      selected[key] = draft[key] = value.reduce((p, v) => p[v], getRoot());
+    } else if (memoSet.has(value)) {
+      const { computeFn, deps } = value;
+      selected[key] = getMemoValue(key, memoCacheMap, computeFn, deps);
+    } else {
+      selected[key] = value;
+    }
+  });
+  if (trackSet.size === 0) {
+    draft = getRoot();
+    mapping.set(ROOT_AS_DRAFT, null);
+  }
+  return { selected, draft, mapping };
+}
+
 /**
  * register assignment by unique type
  */
@@ -177,13 +195,7 @@ export const dispatch = (conveyor, action, abortSignal) => {
   const assignment = assignmentMap.get(action.type);
   if (!assignment) throw ('no type registered!');
 
-  const track = (trackSet, ...path) => {
-    if (path.length === 0) throw ('path needed!');
-    trackSet.add(path)
-    return path;
-  }
-
-  const execSelect = selector => {
+  const getLatestSelection = selector => {
     const mapping = new Map();
     if (!selector) {
       mapping.set(ROOT_AS_DRAFT, null);
@@ -193,7 +205,8 @@ export const dispatch = (conveyor, action, abortSignal) => {
       throw ('only state of plain object deserves a selector for mapping!');
     }
     const trackSet = new Set();
-    const selectorRet = selector(track.bind(null, trackSet));
+    // only track is allowed for selectToPut
+    const selectorRet = selector(operatorsForSelector.track.bind(null, trackSet));
     let selected = {};
     if (trackSet.has(selectorRet)) {
       const path = selectorRet;
@@ -201,25 +214,24 @@ export const dispatch = (conveyor, action, abortSignal) => {
       selected = path.reduce((p, v) => p[v], getRoot());
     } else if (!isPlainObject(selectorRet) || Object.keys(selectorRet).length === 0) {
       throw ('please at least track a prop for selector!');
-    } else {
-      mapping.set(SELECT_AS_RET, selectorRet);
-      Object.entries(selectorRet).forEach(([key, value]) => {
-        if (trackSet.has(value)) {
-          selected[key] = value.reduce((p, v) => p[v], getRoot());
-          mapping.set(key, value);
-        } else {
-          throw ('only tracked prop is allowed in selectToPut for assignment!');
-        }
-      });
     }
+    mapping.set(SELECT_AS_RET, selectorRet);
+    Object.entries(selectorRet).forEach(([key, value]) => {
+      if (trackSet.has(value)) {
+        selected[key] = value.reduce((p, v) => p[v], getRoot());
+        mapping.set(key, value);
+      } else {
+        throw ('only tracked prop is allowed in selectToPut for assignment!');
+      }
+    });
     return { selected, draft: selected, mapping };
   }
   let putPromiseQuene = [];
   const selectToPut = selector => ({
-    select: () => execSelect(selector).selected,
+    select: () => getLatestSelection(selector).selected,
     put: work => {
       if (abortSignal?.aborted) throw ('please do not modify state after dispatch is aborted!');
-      const newState = produceNewState(getRoot(), execSelect(selector), work);
+      const newState = produceNewState(getRoot(), getLatestSelection(selector), work);
       putPromiseQuene.push(checkShouldUpdate(newState));
     }
   });

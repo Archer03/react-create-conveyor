@@ -67,9 +67,6 @@ type PickValue<State, PathArr> = PathArr extends readonly [infer First, ...infer
   ? Rest extends [] ? AbsoluteIndex<State, First> : PickValue<AbsoluteIndex<State, First>, Rest>
   : never
 
-/**
- * usage: ({ track }) => ({ dogAge: track<number>('dog', 'age')
- */
 interface Operators<State> {
   select: <T>(selected: T) => SelectValue<T>
   track: <P extends KeyPath<State>>(...path: P) => TrackedValue<PickValue<State, P>>

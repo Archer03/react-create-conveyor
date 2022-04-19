@@ -3,7 +3,7 @@
 A state-management solution for react in Provider-less mode\
 Based on immerJS\
 Just get value,  and set value, it's all ⚽\
-It is now compatible with concurrent mode and supports typescript!
+It is now compatible with concurrent mode
 
 ```javascript
 import { createConveyor } from 'react-create-conveyor';
@@ -31,9 +31,9 @@ export const [useMyData] = createConveyor({
 })
 
 // pass a selector -> useMyData(selector)
-// use track to do mapping
+// use track to pick value
 const A = () => {
-  const [toDos, setToDos] = useMyData(({ track }) => track('today', 'toDos'));
+  const [toDos, setToDos] = useMyData(({ track }) => track('today', 'toDos')); // typescript helps analyze the path
   return <button onClick={() =>
     setToDos(draft => { // pass producer function to setToDos
       draft.push('task2') // just push it
@@ -52,10 +52,10 @@ const B = () => {
 // use memo to cache calculation
 const C = () => {
   // why to use select?
-  // eg. useMyData(({ state }) => state().dog) // dog is not a recombination object, we won't check its inner keys
-  // so select is to mark it as a recombination object and know how to check it
-  const [dog, drawDog, useTask] = useMyData(({ select, track, state, memo }) => 
-    select({ // 👈 use select
+  // select is to mark the result as a recombination object and then check it by shallow-equal
+  // and with select, dog reference is able to be cached
+  const [dog, drawDog, useTask] = useMyData(({ select, track, state, memo }) =>
+    select({ // 👈 select is recommended
       cName: track('dog', 'name'),
       cBreed: track('dog', 'breed'),
       cAge: track('dog', 'age'),
@@ -67,11 +67,11 @@ const C = () => {
   // useTask to define method
   const reset = useTask((draft, payload) => {
     // only tracked props will be added to draft!
-    // eg. fullName dose not exist in draft, and don't worry, typescript will even remind you!
+    // eg. fullName dose not exist in draft, but don't worry, typescript will even remind you!
     draft.cAge = payload;
     draft.cName = 'xiao bai';
     draft.cBreed = '🐶';
-  })
+  }, []);
   return <div>
     <button onClick={() => drawDog(draft => {
       draft.cName = 'da huang'; // just draw it, able to modify cName directly! 💥
@@ -85,7 +85,7 @@ const C = () => {
 // track is not necessary
 const D = () => {
   const [dogAge1, updateState] = useMyData(({ state }) => state.dog.age); // no prop tracked
-  const [dogAge2, updateAge] = useMyData(({ track }) => track('dog', 'age'));
+  const [dogAge2, updateAge] = useMyData(({ track }) => track('dog', 'age')); // with prop tracked
   return <div>
     D {dogAge1}
     {/* for no prop tracked, draft will be proxy of root state */}
@@ -107,7 +107,8 @@ export const [useMyDog, { register: myRegister, dispatch: myDispatch }] = create
   }
 })
 
-// register an assignment for current conveyor
+// register an assignment
+// select & put which returned from selectToPut are safe in asynchronization
 myRegister('ULTIMATE_EVOLUTION', (action, { selectToPut, state, done }) => {
   const { put: grow } = selectToPut(track => track('dog', 'age'));
   const { select: getDog, put: evolve } = selectToPut(track => ({
@@ -135,7 +136,7 @@ const E = () => {
   }));
   return <button onClick={() =>
     myDispatch({ type: 'ULTIMATE_EVOLUTION' }).then(ability => console.log(ability))
-    // ability will be printed after all impacted rerender is ok 🥳
+    // ability will be printed after all impacted rerender is ok!
     // so the promise returned from dispatch is safe
   }>E async 2s {age} {name} {breed}</button>
 }
