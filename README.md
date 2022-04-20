@@ -2,8 +2,10 @@
 
 A state-management solution for react in Provider-less mode\
 Based on immerJS\
-Just get value,  and set value, it's all ⚽\
-It is now compatible with concurrent mode
+Just get value, and set value, it's all ⚽\
+✔ concurrent mode\
+✔ immutable\
+✔ typescript infer for path tracking
 
 ```javascript
 import { createConveyor } from 'react-create-conveyor';
@@ -36,7 +38,7 @@ const A = () => {
   const [toDos, setToDos] = useMyData(({ track }) => track('today', 'toDos')); // typescript helps analyze the path
   return <button onClick={() =>
     setToDos(draft => { // pass producer function to setToDos
-      draft.push('task2') // just push it
+      draft.push('task2') // just push it, it will be immutable
     })
   }>A{toDos}</button>
 }
@@ -136,7 +138,7 @@ const E = () => {
   }));
   return <button onClick={() =>
     myDispatch({ type: 'ULTIMATE_EVOLUTION' }).then(ability => console.log(ability))
-    // ability will be printed after all impacted rerender is ok!
+    // ability will be printed after all impacted components finish rerender!
     // so the promise returned from dispatch is safe
   }>E async 2s {age} {name} {breed}</button>
 }
@@ -196,7 +198,7 @@ autorun([['dog', 'age']], changed => {
 
 ## Drawback
 
-Similar to react-redux, any state change will trigger notification to all connected components for checking. So please don't put all data into a single global conveyor if you could. But the good news is that react-create-conveyor dosen't need Context/Provider, so it is very easy to create and use sub conveyors whenever and wherever!
+Similar to react-redux, any state change will trigger notification to all connected components for checking. So please don't put all data into a single global conveyor if you could. But the good news is that react-create-conveyor dosen't rely Context/Provider, it is very easy to create and use conveyors whenever and wherever! It's decentralized.
 
 \
 other nice solutions: mobx, jotai, zustand, recoil\

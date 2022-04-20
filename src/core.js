@@ -65,7 +65,7 @@ export const useConveyor = (conveyor, selector) => {
     const doCheck = () => {
       // if render is pending, then abandon notifying
       // it is safe because every render will get latest selection, and after that we are able to notify again
-      // return promise for checkShouldUpdate helps to know when all the impacted component is rerendered
+      // return promise for checkShouldUpdate, which helps to know when all impacted components finish rerender
       if (doCheckRef.current?.doCheckPromise) return doCheckRef.current.doCheckPromise;
       if (!selectedChanged(selectedRef.current, execSelect())) return Promise.resolve();
       const [doCheckPromise, doCheckResolve] = newPromise();
@@ -239,7 +239,7 @@ export const dispatch = (conveyor, action, abortSignal) => {
   const step = promise => steptify(promise, abortSignal);
   const [dispatchPromise, dispatchResolve, dispatchReject] = newPromise();
   const done = res => {
-    // putPromise is the latest prommise which created from put
+    // make sure all impacted components finish rerender
     Promise.all(putPromiseQuene).then(() => dispatchResolve(res), dispatchReject);
   }
   if (abortSignal) subscribeAbort(abortSignal, dispatchReject);

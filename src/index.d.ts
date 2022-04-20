@@ -67,24 +67,40 @@ type PickValue<State, PathArr> = PathArr extends readonly [infer First, ...infer
   ? Rest extends [] ? AbsoluteIndex<State, First> : PickValue<AbsoluteIndex<State, First>, Rest>
   : never
 
+type TrackFn<State> = <P extends KeyPath<State>>(...path: P) => TrackedValue<PickValue<State, P>>
+
 interface Operators<State> {
   select: <T>(selected: T) => SelectValue<T>
-  track: <P extends KeyPath<State>>(...path: P) => TrackedValue<PickValue<State, P>>
+  track: TrackFn<State>
   state: State
   memo: <T>(computeFn: () => T, deps: any[]) => T
 }
 
-type Assignment<State, T> = (action: { type: T, payload: any }, assignmentOpts: {
+type SelectToPutRet<T> =
+  T extends TrackedValue<unknown>
+  ? T['TRACKED']
+  : {
+    [K in keyof T]: AbsoluteIndex<T[K], 'TRACKED'>
+  }
+
+type Assignment<State, Type> = (action: { type: Type, payload: any }, assignmentOpts: {
   state: () => State
-  selectToPut // todo
+  selectToPut: <S>(selector: (track: TrackFn<State>) => S) => {
+    select: () => SelectToPutRet<S>
+    put: ModifyFunction<SelectToPutRet<S>>
+  }
   step: <T>(promiseToCall: Promise<T>) => SteptifyObj<T>
   done: (res: any) => void
   fail: (error: any) => void
   abortSignal: AbortSignal
   onAbort: (callback: (reason: any) => void) => void
 }) => void
+
 type SteptifyObj<T> = {
-  step: (next: (res: unknown) => any, error: (error: unknown) => any) => SteptifyObj<unknown>
+  step: <N, E = never>(
+    next?: (res: T) => N | PromiseLike<N> | undefined | null,
+    error?: (error: any) => E | PromiseLike<E> | undefined | null
+  ) => SteptifyObj<N | E>
   catch: (error: (error: unknown) => any) => SteptifyObj<unknown>
 }
 
