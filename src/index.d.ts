@@ -2,7 +2,7 @@ export function createConveyor<T>(state: T): [useConveyor: UseConveyor<T>, conve
 
 export interface Conveyor<T> {
   register: <S extends string>(type: S, assignment: Assignment<T, S>) => void
-  dispatch: (action: { type: string, payload: any }) => Promise<unknown>
+  dispatch: (action: { type: string, payload?: any }, abortSignal?: AbortSignal) => Promise<unknown>
   assemble: (key: string, subConveyor: Conveyor<unknown>) => void
   autorun: (debugProps: DebugProps, debugEntry: DebugEntry) => void
 }
@@ -19,7 +19,7 @@ type UseConveyor<State> = {
   ]
 }
 
-type ModifyFunction<T> = (valueOrProducer: ValueOrProducer<T>) => void
+export type ModifyFunction<T> = (valueOrProducer: ValueOrProducer<T>) => void
 type ValueOrProducer<T> = ((draft: T) => (void | T)) | T
 // type ValueOrProducer<T> = true extends true ?  ((draft: T) => (void | T)) | T : never // to show detail tips in editor
 type UseTask<T> = <Payload>(clientProducer: ClientProducer<T, Payload>, deps?: any[]) => (payload: Payload) => void
@@ -90,8 +90,8 @@ type Assignment<State, Type> = (action: { type: Type, payload: any }, assignment
     put: ModifyFunction<SelectToPutRet<S>>
   }
   step: <T>(promiseToCall: Promise<T>) => SteptifyObj<T>
-  done: (res: any) => void
-  fail: (error: any) => void
+  done: (res?: any) => void
+  fail: (error?: any) => void
   abortSignal: AbortSignal
   onAbort: (callback: (reason: any) => void) => void
 }) => void

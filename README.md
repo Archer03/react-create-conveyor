@@ -59,7 +59,7 @@ export const [useMyData] = createConveyor({
 const A = () => {
   const [toDos, setToDos] = useMyData(({ track }) => track('today', 'toDos')); // typescript helps analyze the path
   return <button onClick={() =>
-    setToDos(draft => { // pass producer function to setToDos
+    setToDos(draft => { // pass a producer -> setToDos(producer)
       draft.push('task2') // just push it, it will be immutable
     })
   }>A{toDos}</button>
@@ -214,7 +214,7 @@ const [, { autorun }] = createConveyor({ dog: { age: 2 } });
 // just debug happily
 // and with breaking point, to find out where changes happened clearly in function call stack
 autorun([['dog', 'age']], changed => {
-  console.log(changed); // consle log: [{"pre":2,"next":3}]
+  console.log(JSON.stringify(changed)); // consle log: [{"pre":2,"next":3}]
 })
 ```
 
