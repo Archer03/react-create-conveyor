@@ -1,7 +1,7 @@
 {
   "name": "react-create-conveyor",
-  "version": "1.3.7",
-  "description": "a react state management for share, unite and debug data easily",
+  "version": "1.3.8",
+  "description": "an immutable state management solution for react based on immerjs, just pick the paths",
   "main": "src/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

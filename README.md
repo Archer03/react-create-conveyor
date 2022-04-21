@@ -2,10 +2,32 @@
 
 A state-management solution for react in Provider-less mode\
 Based on immerJS\
-Just get value, and set value, it's all ⚽\
+Once pick the paths, do whatever you want ⚽\
 ✔ concurrent mode\
 ✔ immutable\
 ✔ typescript infer for path tracking
+
+## Quick Start
+
+```bash
+npm i react-create-conveyor
+```
+
+or
+[![Edit Conveyor](https://codesandbox.io/static/img/play-codesandbox.svg)](https://codesandbox.io/s/react-create-conveyor-box-57zmv0)
+
+### Table of Contents
+
+- [Example](#example)
+- [Advanced usage](#advanced-usage)
+- [Register Assignment & Async Task](#register-assignment--async-task)
+  - [Cancellation](#cancellation)
+- [Modules](#modules)
+- [Debug Entry](#debug-entry)
+- [Typescript](#typescript)
+- [Drawback](#drawback)
+
+## Example
 
 ```javascript
 import { createConveyor } from 'react-create-conveyor';
@@ -79,8 +101,8 @@ const C = () => {
       draft.cName = 'da huang'; // just draw it, able to modify cName directly! 💥
       draft.cBreed += '🐕'; // next immutable state created by powerful immerJS
     })}>C full:{dog.fullName}</button>
-    <button onClick={() => reset(2)}>reset {dog.cAge}</button>
-    memo:{dog.memoName}
+    <button onClick={() => reset(2)}>reset DogAge {dog.cAge}</button>
+    memo -> depend on age: {dog.memoName}
   </div>
 }
 
@@ -196,9 +218,78 @@ autorun([['dog', 'age']], changed => {
 })
 ```
 
+## Typescript
+
+It's recommended to use typescript to get exact type infer and error tips. But if you don't, you can also get type information from IDE such as vscode for its built-in type infer ability.\
+Let's see how it works with typescript. First to create a conveyor.
+
+```javascript
+const [useMyData] = createConveyor({ count: 0, name: 'wang', today: { toDos: ['task1'] } })
+```
+
+### track
+
+```javascript
+useMyData(({ track }) => track('today', 'toDos')) // ✔
+useMyData(({ track }) => track('today', 'toDoss')) // ❌
+// typescript error for missing 'toDoss' will be like this:
+// Type '["today", "toDoss"]' is not assignable to type 'readonly ["today", "toDos"]'.
+//     Type at position 1 in source is not compatible with type at position 1 in target.
+//       Type '"toDoss"' is not assignable to type '"toDos"'.ts(2345)
+```
+
+### useConveyor
+
+useMyData is actually a hook renamed by yourself
+
+```javascript
+const [data, update] = useMyData(({ select, track, state }) => select({
+  name: state.name,
+  thatIsCount: track('count'),
+  todayToDos: track('today', 'toDos')
+}))
+// data type will be
+// {
+//   name: string;
+//   thatIsCount: number;
+//   todayToDos: string[];
+// }
+
+// update type will be 
+// ModifyFunction<{
+//   thatIsCount: number;
+//   todayToDos: string[];
+// }>
+```
+
+todayToDos is only allowed to contain string element
+
+```javascript
+update(draft => {
+  draft.todayToDos.push(123) // ❌ Argument of type 'number' is not assignable to parameter of type 'string'.ts(2345)
+})
+```
+
+image that if someone delete *thatIsCount* in selector while update function refers to it somewhere, you will get typescript error below
+
+```javascript
+update(draft => {
+  draft.thatIsCount++ // ❌ Property 'thatIsCount' does not exist on type '{ todayToDos: string[]; }'.ts(2339)
+})
+```
+
+if you want to pass data and update to child component with type definition, the only way is to declare type for them as below
+
+```javascript
+type UpdateFn = ModifyFunction<{ // import ModifyFunction type
+  thatIsCount: number;
+  todayToDos: string[];
+}>
+```
+
 ## Drawback
 
-Similar to react-redux, any state change will trigger notification to all connected components for checking. So please don't put all data into a single global conveyor if you could. But the good news is that react-create-conveyor dosen't rely Context/Provider, it is very easy to create and use conveyors whenever and wherever! It's decentralized.
+Similar to react-redux, any state change will trigger notification to all connected components for checking. So please don't put all data into a single global conveyor if you could. But the good news is that react-create-conveyor dosen't rely on Context/Provider, it is very easy to create and use conveyors whenever and wherever! It's decentralized.
 
 \
 other nice solutions: mobx, jotai, zustand, recoil\

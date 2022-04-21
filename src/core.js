@@ -212,6 +212,7 @@ export const dispatch = (conveyor, action, abortSignal) => {
       const path = selectorRet;
       mapping.set(TRACK_AS_RET, path);
       selected = path.reduce((p, v) => p[v], getRoot());
+      return { selected, draft: selected, mapping };
     } else if (!isPlainObject(selectorRet) || Object.keys(selectorRet).length === 0) {
       throw ('please at least track a prop for selector!');
     }
