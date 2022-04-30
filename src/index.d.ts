@@ -25,30 +25,30 @@ type ValueOrProducer<T> = ((draft: T) => (void | T)) | T
 type UseTask<T> = <Payload>(clientProducer: ClientProducer<T, Payload>, deps?: any[]) => (payload: Payload) => void
 type ClientProducer<T, Payload> = (draft: T, payload?: Payload) => (void | T)
 
-type TrackedValue<T> = { TRACKED: T }
+type EditableValue<T> = { EDITABLE: T }
 type SelectValue<T> = { SELECTED: T }
 
 /**
- * get key list includes only tracked props
+ * get key list includes only editable props
  */
-type OnlyTrackKeys<T> = {
-  [K in keyof T]: T[K] extends TrackedValue<unknown> ? K : never
+type OnlyEditKeys<T> = {
+  [K in keyof T]: T[K] extends EditableValue<unknown> ? K : never
 }[keyof T]
 
 type Selected<T> =
-  T extends TrackedValue<unknown>
-  ? T['TRACKED']
+  T extends EditableValue<unknown>
+  ? T['EDITABLE']
   : T extends SelectValue<unknown>
   ? {
-    [K in keyof T['SELECTED']]: T['SELECTED'][K] extends TrackedValue<unknown> ? T['SELECTED'][K]['TRACKED'] : T['SELECTED'][K]
+    [K in keyof T['SELECTED']]: T['SELECTED'][K] extends EditableValue<unknown> ? T['SELECTED'][K]['EDITABLE'] : T['SELECTED'][K]
   }
   : T
 type Draft<T> =
-  T extends TrackedValue<unknown>
-  ? T['TRACKED']
+  T extends EditableValue<unknown>
+  ? T['EDITABLE']
   : T extends SelectValue<unknown>
   ? {
-    [K in OnlyTrackKeys<T['SELECTED']>]: AbsoluteIndex<T['SELECTED'][K], 'TRACKED'>
+    [K in OnlyEditKeys<T['SELECTED']>]: AbsoluteIndex<T['SELECTED'][K], 'EDITABLE'>
   }
   : T
 
@@ -67,25 +67,25 @@ type PickValue<State, PathArr> = PathArr extends readonly [infer First, ...infer
   ? Rest extends [] ? AbsoluteIndex<State, First> : PickValue<AbsoluteIndex<State, First>, Rest>
   : never
 
-type TrackFn<State> = <P extends KeyPath<State>>(...path: P) => TrackedValue<PickValue<State, P>>
+type EditFn<State> = <P extends KeyPath<State>>(...path: P) => EditableValue<PickValue<State, P>>
 
 interface Operators<State> {
   select: <T>(selected: T) => SelectValue<T>
-  track: TrackFn<State>
+  edit: EditFn<State>
   state: State
   memo: <T>(computeFn: () => T, deps: any[]) => T
 }
 
 type SelectToPutRet<T> =
-  T extends TrackedValue<unknown>
-  ? T['TRACKED']
+  T extends EditableValue<unknown>
+  ? T['EDITABLE']
   : {
-    [K in keyof T]: AbsoluteIndex<T[K], 'TRACKED'>
+    [K in keyof T]: AbsoluteIndex<T[K], 'EDITABLE'>
   }
 
 type Assignment<State, Type> = (action: { type: Type, payload: any }, assignmentOpts: {
   state: () => State
-  selectToPut: <S>(selector: (track: TrackFn<State>) => S) => {
+  selectToPut: <S>(selector: (edit: EditFn<State>) => S) => {
     select: () => SelectToPutRet<S>
     put: ModifyFunction<SelectToPutRet<S>>
   }

@@ -20,11 +20,15 @@ or
 
 - [Example](#example)
 - [Advanced usage](#advanced-usage)
-- [Register Assignment & Async Task](#register-assignment--async-task)
+  - [Select](#select)
+  - [useTask](#usetask)
+- [Register Async Method](#register-async-method)
   - [Cancellation](#cancellation)
 - [Modules](#modules)
 - [Debug Entry](#debug-entry)
 - [Typescript](#typescript)
+  - [string path infer for edit](#path-infer-for-edit)
+- [Api Reference](#api-reference)
 - [Drawback](#drawback)
 
 ## Example
@@ -55,9 +59,9 @@ export const [useMyData] = createConveyor({
 })
 
 // pass a selector -> useMyData(selector)
-// use track to pick value
+// use edit to pick value
 const A = () => {
-  const [toDos, setToDos] = useMyData(({ track }) => track('today', 'toDos')); // typescript helps analyze the path
+  const [toDos, setToDos] = useMyData(({ edit }) => edit('today', 'toDos')); // typescript helps analyze the path
   return <button onClick={() =>
     setToDos(draft => { // pass a producer -> setToDos(producer)
       draft.push('task2') // just push it, it will be immutable
@@ -67,59 +71,82 @@ const A = () => {
 
 // pass a value instead of producer function to setCount
 const B = () => {
-  const [count, setCount] = useMyData(({ track }) => track('count'));
+  const [count, setCount] = useMyData(({ edit }) => edit('count'));
   return <button onClick={() => setCount(count + 1)}>B{count}</button>
 }
+```
 
+### select
+
+```javascript
 // use select to collect mappings
 // use state to get values from root state
 // use memo to cache calculation
 const C = () => {
-  // why to use select?
-  // select is to mark the result as a recombination object and then check it by shallow-equal
-  // and with select, dog reference is able to be cached
-  const [dog, drawDog, useTask] = useMyData(({ select, track, state, memo }) =>
+  const [dog, drawDog] = useMyData(({ select, edit, state, memo }) =>
     select({ // 👈 select is recommended
-      cName: track('dog', 'name'),
-      cBreed: track('dog', 'breed'),
-      cAge: track('dog', 'age'),
+      cName: edit('dog', 'name'),
+      cBreed: edit('dog', 'breed'),
+      cAge: edit('dog', 'age'),
       fullName: state.dog.name + state.dog.breed,
       // memoName calculation is now dependent on dog.age
       memoName: memo(() => state.dog.name + state.dog.breed, [state.dog.age]),
     }));
-
-  // useTask to define method
-  const reset = useTask((draft, payload) => {
-    // only tracked props will be added to draft!
-    // eg. fullName dose not exist in draft, but don't worry, typescript will even remind you!
-    draft.cAge = payload;
-    draft.cName = 'xiao bai';
-    draft.cBreed = '🐶';
-  }, []);
   return <div>
     <button onClick={() => drawDog(draft => {
+      // only editable props will be added to draft!
+      // eg. fullName dose not exist in draft, but don't worry, typescript will even remind you!
       draft.cName = 'da huang'; // just draw it, able to modify cName directly! 💥
       draft.cBreed += '🐕'; // next immutable state created by powerful immerJS
     })}>C full:{dog.fullName}</button>
-    <button onClick={() => reset(2)}>reset DogAge {dog.cAge}</button>
-    memo -> depend on age: {dog.memoName}
-  </div>
-}
-
-// track is not necessary
-const D = () => {
-  const [dogAge1, updateState] = useMyData(({ state }) => state.dog.age); // no prop tracked
-  const [dogAge2, updateAge] = useMyData(({ track }) => track('dog', 'age')); // with prop tracked
-  return <div>
-    D {dogAge1}
-    {/* for no prop tracked, draft will be proxy of root state */}
-    <button onClick={() => updateState(draft => { draft.dog.age++ })}>noTrack dogAge+</button>
-    <button onClick={() => updateAge(draft => ++draft)}>track dogAge+</button>
+    memo - depend on age: {dog.memoName}
   </div>
 }
 ```
 
-## Register Assignment & Async Task
+### Why to use select?
+
+The select method is to mark the result as a recombination object and then it could be checked by shallow-equal. And with select, the object result reference is able to be cached.
+
+### Why to use edit?
+
+The edit method marks prop to be editable. It makes things easier. Once pick the paths, do whatever you want. For further info refer to ts part [(useConveyor)](#useconveyor).
+
+```javascript
+// edit is not necessary
+const D = () => {
+  const [dogAge1, update1] = useMyData(({ state }) => state.dog.age); // no edit
+  const [dogAge2, update2] = useMyData(({ edit }) => edit('dog', 'age')); // with edit
+  return <div>
+    D {dogAge1}
+    {/* for no edit, draft will be proxy of root state */}
+    <button onClick={() => update1(draft => { draft.dog.age++ })}>noEdit dogAge+</button>
+    {/* with edit, there is no need to specify the paths repeatedly */}
+    <button onClick={() => update2(age => age + 1)}>dogAge+</button>
+  </div>
+}
+```
+
+### useTask
+
+Define method in component to modify state. And it is allowed to pass dependencies, with useCallback built-in.
+
+```javascript
+// useTask to define method
+const R = () => {
+  const [dog, , useTask] = useMyData(({ edit }) => edit('dog'));
+  const reset = useTask((dog, payload) => {
+    dog.age = payload;
+    dog.name = 'xiao bai';
+    dog.breed = '🐶';
+  }, [])
+  return <button onClick={() => reset(2)}>reset DogAge {dog.age}</button>
+}
+```
+
+## Register Async Method
+
+Register methods outside component to modify state.
 
 ```javascript
 export const [useMyDog, { register: myRegister, dispatch: myDispatch }] = createConveyor({
@@ -131,13 +158,13 @@ export const [useMyDog, { register: myRegister, dispatch: myDispatch }] = create
   }
 })
 
-// register an assignment
 // select & put which returned from selectToPut are safe in asynchronization
+// action: { type, payload }
 myRegister('ULTIMATE_EVOLUTION', (action, { selectToPut, state, done }) => {
-  const { put: grow } = selectToPut(track => track('dog', 'age'));
-  const { select: getDog, put: evolve } = selectToPut(track => ({
-    name: track('dog', 'name'),
-    breed: track('dog', 'breed')
+  const { put: grow } = selectToPut(edit => edit('dog', 'age'));
+  const { select: getDog, put: evolve } = selectToPut(edit => ({
+    name: edit('dog', 'name'),
+    breed: edit('dog', 'breed')
   }));
   const rootState = state(); // get anything from root state
   console.log(`${rootState.owner}: ${getDog().name} ultimate evolution.`);
@@ -177,7 +204,7 @@ myRegister('UPDATE_CANCEL', (action, { step, onAbort, abortSignal }) => {
     .step(() => console.log('mock api done.')) // done
     .step(() => new Promise(res => setTimeout(res, 1000)))
     .step(() => console.log('next step done.')) // won't be done, for 1500ms < 2000ms👇
-  
+
   onAbort(reason => console.log('onAbort: ', reason)); // listen cancellation and unsubscribe automatically
   setTimeout(() => console.log(abortSignal.aborted), 3000); // check whether aborted
 });
@@ -199,7 +226,7 @@ const [, subInstance] = createConveyor(666); // two weeks later created a sub co
 globalAssemble('assembledNumber', subInstance); // just assemble it, it's ok
 
 const F = () => {
-  const [fNum, setCount] = useGlobal(({ track }) => track('assembledNumber'));
+  const [fNum, setCount] = useGlobal(({ edit }) => edit('assembledNumber'));
   return <button onClick={() => setCount(fNum + 1)}>F{fNum}</button> // F666, get it in global conveyor
 }
 ```
@@ -221,17 +248,17 @@ autorun([['dog', 'age']], changed => {
 ## Typescript
 
 It's recommended to use typescript to get exact type infer and error tips. But if you don't, you can also get type information from IDE such as vscode for its built-in type infer ability.\
-Let's see how it works with typescript. First to create a conveyor.
+ First to create a conveyor.
 
 ```javascript
-const [useMyData] = createConveyor({ count: 0, name: 'wang', today: { toDos: ['task1'] } })
+const [useMyData] = createConveyor({ count: 0, today: { toDos: ['task1'] }})
 ```
 
-### track
+### path infer for edit
 
 ```javascript
-useMyData(({ track }) => track('today', 'toDos')) // ✔
-useMyData(({ track }) => track('today', 'toDoss')) // ❌
+useMyData(({ edit }) => edit('today', 'toDos')) // ✔
+useMyData(({ edit }) => edit('today', 'toDoss')) // ❌
 // typescript error for missing 'toDoss' will be like this:
 // Type '["today", "toDoss"]' is not assignable to type 'readonly ["today", "toDos"]'.
 //     Type at position 1 in source is not compatible with type at position 1 in target.
@@ -240,17 +267,17 @@ useMyData(({ track }) => track('today', 'toDoss')) // ❌
 
 ### useConveyor
 
-useMyData is actually a hook renamed by yourself
+useMyData is actually the hook useConveyor renamed by yourself
 
 ```javascript
-const [data, update] = useMyData(({ select, track, state }) => select({
-  name: state.name,
-  thatIsCount: track('count'),
-  todayToDos: track('today', 'toDos')
+const [data, update] = useMyData(({ select, edit, state }) => select({
+  double: state.count * 2, // readonly
+  thatIsCount: edit('count'), // editable
+  todayToDos: edit('today', 'toDos') // editable
 }))
 // data type will be
 // {
-//   name: string;
+//   double: number;
 //   thatIsCount: number;
 //   todayToDos: string[];
 // }
@@ -270,7 +297,7 @@ update(draft => {
 })
 ```
 
-image that if someone delete *thatIsCount* in selector while update function refers to it somewhere, you will get typescript error below
+image that if someone delete **thatIsCount** in selector while update function refers to it somewhere, you will get typescript error below
 
 ```javascript
 update(draft => {
@@ -286,6 +313,31 @@ type UpdateFn = ModifyFunction<{ // import ModifyFunction type
   todayToDos: string[];
 }>
 ```
+
+## Api Reference
+
+|**Method**|**Description**|
+|-|-|
+|createConveyor|create a conveyor|
+|useConveyor|`const [useConveyor] = createConveyor({})` actually it can be renamed like `[useMyData]` [refer to useConveyor](#useconveyor)|
+|register|`const [, { register }] = createConveyor({})` register method to modify state [refer to register](#register-async-method)|
+|dispatch|`const [, { dispatch }] = createConveyor({})` [refer to dispatch](#register-async-method) when dispatch an action, the method registered will be called `dispatch: (action: { type: string, payload?: any }, abortSignal?: AbortSignal) => Promise<unknown>`|
+|assemble|`const [, { assemble }] = createConveyor({})` [refer to modules](#modules)|
+|autorun|`const [, { autorun }] = createConveyor({})` [refer to debug](#debug-entry)|
+|edit|`useConveyor(({ edit }) => edit('dog', 'age'))` [refer to edit](#why-to-use-edit)|
+|state|`useConveyor(({ state }) => state.dog.age)`|
+|select|`useConveyor(({ select }) => select({ prop: value })` [refer to select](#select)|
+|memo|`useConveyor(({ select, memo }) => select({ }))` [refer to memo](#select)|
+|updateFn|`const [, setToDos] = useConveyor()` can be renamed [refer to setToDos](#advanced-usage)|
+|useTask|`const [, , useTask] = useConveyor()` can be renamed [refer to useTask](#usetask)|
+|selectToPut|`register('ACTION_TYPE', (action, { selectToPut }) => {})` select the props which you want to modify [refer to async](#register-async-method)|
+|select & put|`const { select, put } = selectToPut()` one for getValue, another for setValue. They are safe in async callback|
+|state: Function|`register('ACTION_TYPE', (action, { state }) => {})` able to get latest version of state in async callback|
+|done|`register('ACTION_TYPE', (action, { done }) => {})` resolve the promise returned from dispatch [refer to async](#register-async-method)|
+|fail|`register('ACTION_TYPE', (action, { fail }) => {})` reject the promise returned from dispatch|
+|step|`register('ACTION_TYPE', (action, { step }) => {})` make promise chain abortable [refer to cancel](#cancellation)|
+|onAbort|`register('ACTION_TYPE', (action, { onAbort }) => {})` [refer to cancel](#cancellation)|
+|abortSignal|`register('ACTION_TYPE', (action, { abortSignal }) => {})` [refer to cancel](#cancellation)|
 
 ## Drawback
 

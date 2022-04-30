@@ -1,5 +1,5 @@
 import produce from 'immer';
-import { TRACK_AS_RET, ROOT_AS_DRAFT, SELECT_AS_RET } from './core';
+import { EDIT_AS_RET, ROOT_AS_DRAFT, SELECT_AS_RET } from './core';
 
 /**
  * compare changes for selected
@@ -18,22 +18,22 @@ export const selectedChanged = (preSelected, selectInfo) => {
  */
 export const produceNewState = (curRoot, selectInfo, work) => {
   const { draft, mapping } = selectInfo;
-  const singleTrack = mapping.get(TRACK_AS_RET);
-  // only 3 case is allowed here: root as draft, track as ret, select as ret
+  const singleEdit = mapping.get(EDIT_AS_RET);
+  // only 3 case is allowed here: root as draft, edit as ret, select as ret
   let newState = null;
   if (typeof work === 'function') {
     const nextSlice = produce(draft, work);
     if (mapping.has(ROOT_AS_DRAFT)) {
       newState = nextSlice;
-    } else if (singleTrack) {
-      newState = produceByOnePath(curRoot, nextSlice, singleTrack);
+    } else if (singleEdit) {
+      newState = produceByOnePath(curRoot, nextSlice, singleEdit);
     } else {
       newState = produceByMapping(curRoot, nextSlice, mapping.get(SELECT_AS_RET));
     }
   } else if (mapping.has(ROOT_AS_DRAFT)) {
     newState = work;
-  } else if (singleTrack) {
-    newState = produceByOnePath(curRoot, work, singleTrack);
+  } else if (singleEdit) {
+    newState = produceByOnePath(curRoot, work, singleEdit);
   } else {
     throw ('to set value directly, do not create mapping for selector!');
   }
@@ -65,7 +65,7 @@ export const produceByOnePath = (toModify, next, path) => {
 }
 
 /**
- * if the tracked props changed, debugEntry function will be executed
+ * if props changed, debugEntry function will be executed
  */
 export const hitSoy = (preState, nextState, [debugProps, debugEntry]) => {
   if (!debugProps?.length) {

@@ -9,7 +9,7 @@ const UPDATERS = Symbol();
 const ASSIGN_MAP = Symbol();
 
 export const SELECT_AS_RET = Symbol();
-export const TRACK_AS_RET = Symbol();
+export const EDIT_AS_RET = Symbol();
 export const ROOT_AS_DRAFT = Symbol();
 
 export const createInstance = state => {
@@ -109,9 +109,9 @@ const operatorsForSelector = {
     selectSet.add(remapped);
     return remapped;
   },
-  track: (trackSet, ...path) => {
+  edit: (editSet, ...path) => {
     if (path.length === 0) throw ('path needed!');
-    trackSet.add(path)
+    editSet.add(path)
     return path;
   },
   memo: (memoSet, computeFn, deps) => {
@@ -123,33 +123,33 @@ const operatorsForSelector = {
 
 /**
  * return a select function help to get the latest custom selection and draft target
- * only the tracked key will exist in draft
+ * only the editable key will exist in draft
  * @returns { selected, draft, mapping }
  */
 const getSelectThunk = (selector, getRoot, memoCacheMap) => () => {
-  const { select, track, memo } = operatorsForSelector;
+  const { select, edit, memo } = operatorsForSelector;
   let mapping = new Map();
   if (!selector) {
     mapping.set(ROOT_AS_DRAFT, null);
     return { selected: getRoot(), draft: getRoot(), mapping };
   }
   const selectSet = new Set();
-  const trackSet = new Set();
+  const editSet = new Set();
   const memoSet = new Set();
   const selectorRet = selector({
     state: getRoot(),
     select: select.bind(null, selectSet),
-    track: track.bind(null, trackSet),
+    edit: edit.bind(null, editSet),
     memo: memo.bind(null, memoSet),
   });
-  if (trackSet.has(selectorRet)) { // useMyData(({ track }) => track('count')); // tracked prop as selector ret
+  if (editSet.has(selectorRet)) { // useMyData(({ edit }) => edit('count')); // editable prop as selector ret
     const path = selectorRet;
-    mapping.set(TRACK_AS_RET, path);
+    mapping.set(EDIT_AS_RET, path);
     const selected = path.reduce((p, v) => p[v], getRoot());
     return { selected, draft: selected, mapping };
   } else if (!selectSet.has(selectorRet)) {
-    if (trackSet.size || memoSet.size) {
-      throw ('track and memo could only work with select, check whether select is used!');
+    if (editSet.size || memoSet.size) {
+      throw ('edit and memo could only work with select, check whether select is used!');
     }
     mapping.set(ROOT_AS_DRAFT, null);
     return { selected: selectorRet, draft: getRoot(), mapping };
@@ -160,7 +160,7 @@ const getSelectThunk = (selector, getRoot, memoCacheMap) => () => {
   mapping.set(SELECT_AS_RET, selectorRet);
   let selected = {}, draft = {};
   Object.entries(selectorRet).forEach(([key, value]) => {
-    if (trackSet.has(value)) {
+    if (editSet.has(value)) {
       selected[key] = draft[key] = value.reduce((p, v) => p[v], getRoot());
     } else if (memoSet.has(value)) {
       const { computeFn, deps } = value;
@@ -169,7 +169,7 @@ const getSelectThunk = (selector, getRoot, memoCacheMap) => () => {
       selected[key] = value;
     }
   });
-  if (trackSet.size === 0) {
+  if (editSet.size === 0) {
     draft = getRoot();
     mapping.set(ROOT_AS_DRAFT, null);
   }
@@ -204,25 +204,24 @@ export const dispatch = (conveyor, action, abortSignal) => {
     if (!isPlainObject(getRoot())) {
       throw ('only state of plain object deserves a selector for mapping!');
     }
-    const trackSet = new Set();
-    // only track is allowed for selectToPut
-    const selectorRet = selector(operatorsForSelector.track.bind(null, trackSet));
+    const editSet = new Set();
+    const selectorRet = selector(operatorsForSelector.edit.bind(null, editSet));
     let selected = {};
-    if (trackSet.has(selectorRet)) {
+    if (editSet.has(selectorRet)) {
       const path = selectorRet;
-      mapping.set(TRACK_AS_RET, path);
+      mapping.set(EDIT_AS_RET, path);
       selected = path.reduce((p, v) => p[v], getRoot());
       return { selected, draft: selected, mapping };
     } else if (!isPlainObject(selectorRet) || Object.keys(selectorRet).length === 0) {
-      throw ('please at least track a prop for selector!');
+      throw ('please at least edit a prop for selector!');
     }
     mapping.set(SELECT_AS_RET, selectorRet);
     Object.entries(selectorRet).forEach(([key, value]) => {
-      if (trackSet.has(value)) {
+      if (editSet.has(value)) {
         selected[key] = value.reduce((p, v) => p[v], getRoot());
         mapping.set(key, value);
       } else {
-        throw ('only tracked prop is allowed in selectToPut for assignment!');
+        throw ('only editable prop is allowed in selectToPut for assignment!');
       }
     });
     return { selected, draft: selected, mapping };
