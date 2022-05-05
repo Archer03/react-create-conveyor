@@ -9,7 +9,7 @@ const UPDATERS = Symbol();
 const ASSIGN_MAP = Symbol();
 
 export const SELECT_AS_RET = Symbol();
-export const EDIT_AS_RET = Symbol();
+export const GET_IN_AS_RET = Symbol();
 export const ROOT_AS_DRAFT = Symbol();
 
 export const createInstance = state => {
@@ -109,9 +109,9 @@ const operatorsForSelector = {
     selectSet.add(remapped);
     return remapped;
   },
-  edit: (editSet, ...path) => {
+  getIn: (getInSet, ...path) => {
     if (path.length === 0) throw ('path needed!');
-    editSet.add(path)
+    getInSet.add(path)
     return path;
   },
   memo: (memoSet, computeFn, deps) => {
@@ -123,33 +123,33 @@ const operatorsForSelector = {
 
 /**
  * return a select function help to get the latest custom selection and draft target
- * only the editable key will exist in draft
+ * only the getIn prop will exist in draft
  * @returns { selected, draft, mapping }
  */
 const getSelectThunk = (selector, getRoot, memoCacheMap) => () => {
-  const { select, edit, memo } = operatorsForSelector;
+  const { select, getIn, memo } = operatorsForSelector;
   let mapping = new Map();
   if (!selector) {
     mapping.set(ROOT_AS_DRAFT, null);
     return { selected: getRoot(), draft: getRoot(), mapping };
   }
   const selectSet = new Set();
-  const editSet = new Set();
+  const getInSet = new Set();
   const memoSet = new Set();
   const selectorRet = selector({
     state: getRoot(),
     select: select.bind(null, selectSet),
-    edit: edit.bind(null, editSet),
+    getIn: getIn.bind(null, getInSet),
     memo: memo.bind(null, memoSet),
   });
-  if (editSet.has(selectorRet)) { // useMyData(({ edit }) => edit('count')); // editable prop as selector ret
+  if (getInSet.has(selectorRet)) { // useMyData(({ getIn }) => getIn('count')); // getIn prop as selector ret
     const path = selectorRet;
-    mapping.set(EDIT_AS_RET, path);
+    mapping.set(GET_IN_AS_RET, path);
     const selected = path.reduce((p, v) => p[v], getRoot());
     return { selected, draft: selected, mapping };
   } else if (!selectSet.has(selectorRet)) {
-    if (editSet.size || memoSet.size) {
-      throw ('edit and memo could only work with select, check whether select is used!');
+    if (getInSet.size || memoSet.size) {
+      throw ('getIn and memo could only work with select, check whether select is used!');
     }
     mapping.set(ROOT_AS_DRAFT, null);
     return { selected: selectorRet, draft: getRoot(), mapping };
@@ -160,7 +160,7 @@ const getSelectThunk = (selector, getRoot, memoCacheMap) => () => {
   mapping.set(SELECT_AS_RET, selectorRet);
   let selected = {}, draft = {};
   Object.entries(selectorRet).forEach(([key, value]) => {
-    if (editSet.has(value)) {
+    if (getInSet.has(value)) {
       selected[key] = draft[key] = value.reduce((p, v) => p[v], getRoot());
     } else if (memoSet.has(value)) {
       const { computeFn, deps } = value;
@@ -169,7 +169,7 @@ const getSelectThunk = (selector, getRoot, memoCacheMap) => () => {
       selected[key] = value;
     }
   });
-  if (editSet.size === 0) {
+  if (getInSet.size === 0) {
     draft = getRoot();
     mapping.set(ROOT_AS_DRAFT, null);
   }
@@ -204,24 +204,24 @@ export const dispatch = (conveyor, action, abortSignal) => {
     if (!isPlainObject(getRoot())) {
       throw ('only state of plain object deserves a selector for mapping!');
     }
-    const editSet = new Set();
-    const selectorRet = selector(operatorsForSelector.edit.bind(null, editSet));
+    const getInSet = new Set();
+    const selectorRet = selector(operatorsForSelector.getIn.bind(null, getInSet));
     let selected = {};
-    if (editSet.has(selectorRet)) {
+    if (getInSet.has(selectorRet)) {
       const path = selectorRet;
-      mapping.set(EDIT_AS_RET, path);
+      mapping.set(GET_IN_AS_RET, path);
       selected = path.reduce((p, v) => p[v], getRoot());
       return { selected, draft: selected, mapping };
     } else if (!isPlainObject(selectorRet) || Object.keys(selectorRet).length === 0) {
-      throw ('please at least edit a prop for selector!');
+      throw ('please at least getIn a prop for selector!');
     }
     mapping.set(SELECT_AS_RET, selectorRet);
     Object.entries(selectorRet).forEach(([key, value]) => {
-      if (editSet.has(value)) {
+      if (getInSet.has(value)) {
         selected[key] = value.reduce((p, v) => p[v], getRoot());
         mapping.set(key, value);
       } else {
-        throw ('only editable prop is allowed in selectToPut for assignment!');
+        throw ('only getIn prop is allowed in selectToPut for assignment!');
       }
     });
     return { selected, draft: selected, mapping };

@@ -1,5 +1,5 @@
 import produce from 'immer';
-import { EDIT_AS_RET, ROOT_AS_DRAFT, SELECT_AS_RET } from './core';
+import { GET_IN_AS_RET, ROOT_AS_DRAFT, SELECT_AS_RET } from './core';
 
 /**
  * compare changes for selected
@@ -18,22 +18,22 @@ export const selectedChanged = (preSelected, selectInfo) => {
  */
 export const produceNewState = (curRoot, selectInfo, work) => {
   const { draft, mapping } = selectInfo;
-  const singleEdit = mapping.get(EDIT_AS_RET);
-  // only 3 case is allowed here: root as draft, edit as ret, select as ret
+  const singlePropGetIn = mapping.get(GET_IN_AS_RET);
+  // only 3 case is allowed here: root as draft, getIn as ret, select as ret
   let newState = null;
   if (typeof work === 'function') {
     const nextSlice = produce(draft, work);
     if (mapping.has(ROOT_AS_DRAFT)) {
       newState = nextSlice;
-    } else if (singleEdit) {
-      newState = produceByOnePath(curRoot, nextSlice, singleEdit);
+    } else if (singlePropGetIn) {
+      newState = produceByOnePath(curRoot, nextSlice, singlePropGetIn);
     } else {
       newState = produceByMapping(curRoot, nextSlice, mapping.get(SELECT_AS_RET));
     }
   } else if (mapping.has(ROOT_AS_DRAFT)) {
     newState = work;
-  } else if (singleEdit) {
-    newState = produceByOnePath(curRoot, work, singleEdit);
+  } else if (singlePropGetIn) {
+    newState = produceByOnePath(curRoot, work, singlePropGetIn);
   } else {
     throw ('to set value directly, do not create mapping for selector!');
   }

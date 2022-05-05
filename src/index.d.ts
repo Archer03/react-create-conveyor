@@ -29,7 +29,8 @@ type EditableValue<T> = { EDITABLE: T }
 type SelectValue<T> = { SELECTED: T }
 
 /**
- * get key list includes only editable props
+ * get key list which includes only editable props
+ * getIn marks prop as editable
  */
 type OnlyEditKeys<T> = {
   [K in keyof T]: T[K] extends EditableValue<unknown> ? K : never
@@ -67,11 +68,11 @@ type PickValue<State, PathArr> = PathArr extends readonly [infer First, ...infer
   ? Rest extends [] ? AbsoluteIndex<State, First> : PickValue<AbsoluteIndex<State, First>, Rest>
   : never
 
-type EditFn<State> = <P extends KeyPath<State>>(...path: P) => EditableValue<PickValue<State, P>>
+type getIn<State> = <P extends KeyPath<State>>(...path: P) => EditableValue<PickValue<State, P>>
 
 interface Operators<State> {
   select: <T>(selected: T) => SelectValue<T>
-  edit: EditFn<State>
+  getIn: getIn<State>
   state: State
   memo: <T>(computeFn: () => T, deps: any[]) => T
 }
@@ -85,7 +86,7 @@ type SelectToPutRet<T> =
 
 type Assignment<State, Type> = (action: { type: Type, payload: any }, assignmentOpts: {
   state: () => State
-  selectToPut: <S>(selector: (edit: EditFn<State>) => S) => {
+  selectToPut: <S>(selector: (getIn: getIn<State>) => S) => {
     select: () => SelectToPutRet<S>
     put: ModifyFunction<SelectToPutRet<S>>
   }

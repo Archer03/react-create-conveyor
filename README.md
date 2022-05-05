@@ -3,9 +3,7 @@
 A state-management solution for react in Provider-less mode\
 Based on immerJS\
 Once pick the paths, do whatever you want ⚽\
-✔ concurrent mode\
-✔ immutable\
-✔ typescript infer for path tracking
+✔ concurrent mode
 
 ## Quick Start
 
@@ -27,7 +25,7 @@ or
 - [Modules](#modules)
 - [Debug Entry](#debug-entry)
 - [Typescript](#typescript)
-  - [string path infer for edit](#path-infer-for-edit)
+  - [string path infer for getIn](#path-infer-for-getin)
 - [Api Reference](#api-reference)
 - [Drawback](#drawback)
 
@@ -59,9 +57,9 @@ export const [useMyData] = createConveyor({
 })
 
 // pass a selector -> useMyData(selector)
-// use edit to pick value
+// use getIn to pick value
 const A = () => {
-  const [toDos, setToDos] = useMyData(({ edit }) => edit('today', 'toDos')); // typescript helps analyze the path
+  const [toDos, setToDos] = useMyData(({ getIn }) => getIn('today', 'toDos')); // typescript helps analyze the path
   return <button onClick={() =>
     setToDos(draft => { // pass a producer -> setToDos(producer)
       draft.push('task2') // just push it, it will be immutable
@@ -71,7 +69,7 @@ const A = () => {
 
 // pass a value instead of producer function to setCount
 const B = () => {
-  const [count, setCount] = useMyData(({ edit }) => edit('count'));
+  const [count, setCount] = useMyData(({ getIn }) => getIn('count'));
   return <button onClick={() => setCount(count + 1)}>B{count}</button>
 }
 ```
@@ -83,19 +81,16 @@ const B = () => {
 // use state to get values from root state
 // use memo to cache calculation
 const C = () => {
-  const [dog, drawDog] = useMyData(({ select, edit, state, memo }) =>
+  const [dog, drawDog] = useMyData(({ select, getIn, state, memo }) =>
     select({ // 👈 select is recommended
-      cName: edit('dog', 'name'),
-      cBreed: edit('dog', 'breed'),
-      cAge: edit('dog', 'age'),
+      cName: getIn('dog', 'name'),
+      cBreed: getIn('dog', 'breed'),
       fullName: state.dog.name + state.dog.breed,
       // memoName calculation is now dependent on dog.age
       memoName: memo(() => state.dog.name + state.dog.breed, [state.dog.age]),
     }));
   return <div>
     <button onClick={() => drawDog(draft => {
-      // only editable props will be added to draft!
-      // eg. fullName dose not exist in draft, but don't worry, typescript will even remind you!
       draft.cName = 'da huang'; // just draw it, able to modify cName directly! 💥
       draft.cBreed += '🐕'; // next immutable state created by powerful immerJS
     })}>C full:{dog.fullName}</button>
@@ -108,20 +103,20 @@ const C = () => {
 
 The select method is to mark the result as a recombination object and then it could be checked by shallow-equal. And with select, the object result reference is able to be cached.
 
-### Why to use edit?
+### Why to use getIn?
 
-The edit method marks prop to be editable. It makes things easier. Once pick the paths, do whatever you want. For further info refer to ts part [(useConveyor)](#useconveyor).
+The getIn method makes things easier. Once pick the paths, do whatever you want. For further info, refer to ts part [getIn](#path-infer-for-getin) and [useConveyor](#useconveyor).
 
 ```javascript
-// edit is not necessary
+// getIn is not necessary
 const D = () => {
-  const [dogAge1, update1] = useMyData(({ state }) => state.dog.age); // no edit
-  const [dogAge2, update2] = useMyData(({ edit }) => edit('dog', 'age')); // with edit
+  const [dogAge1, update1] = useMyData(({ state }) => state.dog.age); // no getIn
+  const [dogAge2, update2] = useMyData(({ getIn }) => getIn('dog', 'age')); // with getIn
   return <div>
     D {dogAge1}
-    {/* for no edit, draft will be proxy of root state */}
-    <button onClick={() => update1(draft => { draft.dog.age++ })}>noEdit dogAge+</button>
-    {/* with edit, there is no need to specify the paths repeatedly */}
+    {/* for no getIn, draft will be proxy of root state! */}
+    <button onClick={() => update1(draft => { draft.dog.age++ })}>nogetIn dogAge+</button>
+    {/* with getIn, there is no need to specify the paths repeatedly, just set age! */}
     <button onClick={() => update2(age => age + 1)}>dogAge+</button>
   </div>
 }
@@ -134,7 +129,7 @@ Define method in component to modify state. And it is allowed to pass dependenci
 ```javascript
 // useTask to define method
 const R = () => {
-  const [dog, , useTask] = useMyData(({ edit }) => edit('dog'));
+  const [dog, , useTask] = useMyData(({ getIn }) => getIn('dog'));
   const reset = useTask((dog, payload) => {
     dog.age = payload;
     dog.name = 'xiao bai';
@@ -154,42 +149,30 @@ export const [useMyDog, { register: myRegister, dispatch: myDispatch }] = create
   dog: {
     name: '加布兽(Gabumon)',
     breed: '🐶',
-    age: 2
   }
 })
 
 // select & put which returned from selectToPut are safe in asynchronization
 // action: { type, payload }
-myRegister('ULTIMATE_EVOLUTION', (action, { selectToPut, state, done }) => {
-  const { put: grow } = selectToPut(edit => edit('dog', 'age'));
-  const { select: getDog, put: evolve } = selectToPut(edit => ({
-    name: edit('dog', 'name'),
-    breed: edit('dog', 'breed')
-  }));
-  const rootState = state(); // get anything from root state
-  console.log(`${rootState.owner}: ${getDog().name} ultimate evolution.`);
+myRegister('EVOLUTION', (action, { selectToPut, state, done }) => {
+  const { select: getDog, put: evolve } = selectToPut(getIn => getIn('dog'));
+  console.log(`${state().owner}: ${getDog().name} ultimate evolution.`);
   setTimeout(() => { // to modify state in async callback
-    grow(age => age * 10);
     evolve(draft => {
       draft.name = '钢铁加鲁鲁(Metal Garurumon)';
       draft.breed = '🐺';
     });
-    console.log(`${getDog().name}`);
-    done('绝对冷冻气(Cocytus Breath)'); // try to resolve the promise return from dispatch
+    done('=> 绝对冷冻气(Cocytus Breath)'); // try to resolve the promise return from dispatch
   }, 2000);
 })
 
 const E = () => {
-  const [{ age, name, breed }] = useMyDog(({ state, select }) => select({
-    age: state.dog.age,
-    name: state.dog.name,
-    breed: state.dog.breed
-  }));
+  const [dog] = useMyDog(({ state }) => state.dog);
   return <button onClick={() =>
-    myDispatch({ type: 'ULTIMATE_EVOLUTION' }).then(ability => console.log(ability))
+    myDispatch({ type: 'EVOLUTION' }).then(ability => console.log(dog.name + ability))
     // ability will be printed after all impacted components finish rerender!
     // so the promise returned from dispatch is safe
-  }>E async 2s {age} {name} {breed}</button>
+  }>E async 2s {dog.name} {dog.breed}</button>
 }
 ```
 
@@ -226,7 +209,7 @@ const [, subInstance] = createConveyor(666); // two weeks later created a sub co
 globalAssemble('assembledNumber', subInstance); // just assemble it, it's ok
 
 const F = () => {
-  const [fNum, setCount] = useGlobal(({ edit }) => edit('assembledNumber'));
+  const [fNum, setCount] = useGlobal(({ getIn }) => getIn('assembledNumber'));
   return <button onClick={() => setCount(fNum + 1)}>F{fNum}</button> // F666, get it in global conveyor
 }
 ```
@@ -254,11 +237,11 @@ It's recommended to use typescript to get exact type infer and error tips. But i
 const [useMyData] = createConveyor({ count: 0, today: { toDos: ['task1'] }})
 ```
 
-### path infer for edit
+### path infer for getIn
 
 ```javascript
-useMyData(({ edit }) => edit('today', 'toDos')) // ✔
-useMyData(({ edit }) => edit('today', 'toDoss')) // ❌
+useMyData(({ getIn }) => getIn('today', 'toDos')) // ✔
+useMyData(({ getIn }) => getIn('today', 'toDoss')) // ❌
 // typescript error for missing 'toDoss' will be like this:
 // Type '["today", "toDoss"]' is not assignable to type 'readonly ["today", "toDos"]'.
 //     Type at position 1 in source is not compatible with type at position 1 in target.
@@ -268,12 +251,13 @@ useMyData(({ edit }) => edit('today', 'toDoss')) // ❌
 ### useConveyor
 
 useMyData is actually the hook useConveyor renamed by yourself
+Only editable props will exist on draft, owe to getIn
 
 ```javascript
-const [data, update] = useMyData(({ select, edit, state }) => select({
+const [data, update] = useMyData(({ select, getIn, state }) => select({
   double: state.count * 2, // readonly
-  thatIsCount: edit('count'), // editable
-  todayToDos: edit('today', 'toDos') // editable
+  thatIsCount: getIn('count'), // editable
+  todayToDos: getIn('today', 'toDos') // editable
 }))
 // data type will be
 // {
@@ -282,10 +266,10 @@ const [data, update] = useMyData(({ select, edit, state }) => select({
 //   todayToDos: string[];
 // }
 
-// update type will be 
+// update type will be
 // ModifyFunction<{
-//   thatIsCount: number;
-//   todayToDos: string[];
+//   thatIsCount: number;  -->  editable
+//   todayToDos: string[];  -->  editable
 // }>
 ```
 
@@ -316,20 +300,25 @@ type UpdateFn = ModifyFunction<{ // import ModifyFunction type
 
 ## Api Reference
 
+### basic
+
 |**Method**|**Description**|
 |-|-|
 |createConveyor|create a conveyor|
 |useConveyor|`const [useConveyor] = createConveyor({})` actually it can be renamed like `[useMyData]` [refer to useConveyor](#useconveyor)|
-|register|`const [, { register }] = createConveyor({})` register method to modify state [refer to register](#register-async-method)|
-|dispatch|`const [, { dispatch }] = createConveyor({})` [refer to dispatch](#register-async-method) when dispatch an action, the method registered will be called `dispatch: (action: { type: string, payload?: any }, abortSignal?: AbortSignal) => Promise<unknown>`|
-|assemble|`const [, { assemble }] = createConveyor({})` [refer to modules](#modules)|
-|autorun|`const [, { autorun }] = createConveyor({})` [refer to debug](#debug-entry)|
-|edit|`useConveyor(({ edit }) => edit('dog', 'age'))` [refer to edit](#why-to-use-edit)|
+|getIn|`useConveyor(({ getIn }) => getIn('dog', 'age'))` [refer to getIn](#why-to-use-getin)|
 |state|`useConveyor(({ state }) => state.dog.age)`|
 |select|`useConveyor(({ select }) => select({ prop: value })` [refer to select](#select)|
-|memo|`useConveyor(({ select, memo }) => select({ }))` [refer to memo](#select)|
+|memo|`useConveyor(({ select, memo }) => select({ memoValue: memo() }))` [refer to memo](#select)|
 |updateFn|`const [, setToDos] = useConveyor()` can be renamed [refer to setToDos](#advanced-usage)|
 |useTask|`const [, , useTask] = useConveyor()` can be renamed [refer to useTask](#usetask)|
+
+### dispatch
+
+|**Method**|**Description**|
+|-|-|
+|register|`const [, { register }] = createConveyor({})` register method to modify state [refer to register](#register-async-method)|
+|dispatch|`const [, { dispatch }] = createConveyor({})` [refer to dispatch](#register-async-method) when dispatch an action, the method registered will be called `dispatch: (action: { type: string, payload?: any }, abortSignal?: AbortSignal) => Promise<unknown>`|
 |selectToPut|`register('ACTION_TYPE', (action, { selectToPut }) => {})` select the props which you want to modify [refer to async](#register-async-method)|
 |select & put|`const { select, put } = selectToPut()` one for getValue, another for setValue. They are safe in async callback|
 |state: Function|`register('ACTION_TYPE', (action, { state }) => {})` able to get latest version of state in async callback|
@@ -338,6 +327,13 @@ type UpdateFn = ModifyFunction<{ // import ModifyFunction type
 |step|`register('ACTION_TYPE', (action, { step }) => {})` make promise chain abortable [refer to cancel](#cancellation)|
 |onAbort|`register('ACTION_TYPE', (action, { onAbort }) => {})` [refer to cancel](#cancellation)|
 |abortSignal|`register('ACTION_TYPE', (action, { abortSignal }) => {})` [refer to cancel](#cancellation)|
+
+### other
+
+|**Method**|**Description**|
+|-|-|
+|assemble|`const [, { assemble }] = createConveyor({})` [refer to modules](#modules)|
+|autorun|`const [, { autorun }] = createConveyor({})` [refer to debug](#debug-entry)|
 
 ## Drawback
 
